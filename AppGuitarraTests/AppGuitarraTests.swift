@@ -175,3 +175,140 @@ final class TuningStateTests: XCTestCase {
         XCTAssertLessThanOrEqual(peak, 0.81)
     }
 }
+
+// MARK: - Phase 1: lessons and practice timing
+
+final class LessonCatalogTests: XCTestCase {
+    func testLessonContentIsValid() throws {
+        let catalog = try LessonCatalog.load()
+        XCTAssertFalse(catalog.lessons.isEmpty)
+        XCTAssertEqual(catalog.validationErrors(), [])
+        XCTAssertEqual(Set(catalog.lessons.map(\.id)).count, catalog.lessons.count, "Lesson ids must be unique")
+    }
+
+    func testEveryLessonEndsWithACheck() throws {
+        for lesson in try LessonCatalog.load().lessons {
+            XCTAssertEqual(lesson.steps.last?.kind, .check, lesson.id)
+        }
+    }
+
+    func testCheckInheritsPatternAndProgressionFromPractice() throws {
+        let lesson = try XCTUnwrap(try LessonCatalog.load().lessons.first { $0.id == "L01" })
+        let checkIndex = try XCTUnwrap(lesson.steps.lastIndex { $0.kind == .check })
+        let resolved = try XCTUnwrap(lesson.resolvedCheck(at: checkIndex))
+        XCTAssertEqual(resolved.pattern, "quarter-downs")
+        XCTAssertEqual(resolved.progression.map(\.chord), ["Em", "Am"])
+        XCTAssertEqual(lesson.practiceIndex(before: checkIndex), checkIndex - 1)
+    }
+
+    func testDecodesStepTypes() throws {
+        let json = """
+        [{ "id": "X", "number": 1, "module": "M", "title": "T", "summary": "S", "chords": ["G"],
+           "steps": [
+             { "type": "show", "title": "a", "text": "b", "chord": "G" },
+             { "type": "practice", "title": "a", "text": "b", "pattern": "folk", "bpm": 70,
+               "progression": [{ "chord": "G", "bars": 2 }] },
+             { "type": "check", "title": "a", "goal": "g", "bars": 4, "bpm": 70 }
+           ] }]
+        """
+        let lessons = try JSONDecoder().decode([Lesson].self, from: Data(json.utf8))
+        XCTAssertEqual(lessons.first?.steps.map(\.kind), [.show, .practice, .check])
+    }
+}
+
+final class StrumPatternTests: XCTestCase {
+    func testFolkPatternParses() {
+        let folk = StrumPattern(id: "folk", name: "Folk", strokes: "D-DU -UDU")
+        XCTAssertTrue(folk.isValid)
+        XCTAssertEqual(folk.slots, [.down, .miss, .down, .up, .miss, .up, .down, .up])
+        XCTAssertEqual((0..<8).map(folk.countLabel), ["1", "&", "2", "&", "3", "&", "4", "&"])
+    }
+
+    func testInvalidPatterns() {
+        XCTAssertFalse(StrumPattern(id: "x", name: "x", strokes: "D-D").isValid)
+        XCTAssertFalse(StrumPattern(id: "x", name: "x", strokes: "D-DX-UDU").isValid)
+        XCTAssertFalse(StrumPattern(id: "x", name: "x", strokes: "D-DU-UDU", accents: [8]).isValid)
+    }
+}
+
+final class PracticeTimelineTests: XCTestCase {
+    private func timeline(bpm: Double = 60, totalBars: Int? = nil) throws -> PracticeTimeline {
+        let chords = try ChordLibrary.loadChords()
+        let g = try XCTUnwrap(chords.first { $0.id == "G" })
+        let d = try XCTUnwrap(chords.first { $0.id == "D" })
+        let folk = StrumPattern(id: "folk", name: "Folk", strokes: "D-DU-UDU", accents: [0])
+        return PracticeTimeline(config: PracticeConfig(
+            pattern: folk,
+            segments: [PracticeSegment(chord: g, bars: 2), PracticeSegment(chord: d, bars: 1)],
+            bpm: bpm, countInBars: 1, totalBars: totalBars
+        ))
+    }
+
+    func testCountIn() throws {
+        // 60 bpm: one beat per second, count-in lasts 4 s.
+        let t = try timeline()
+        XCTAssertEqual(t.position(at: 0).countInBeat, 1)
+        XCTAssertTrue(t.position(at: 2.5).isCountIn)
+        XCTAssertEqual(t.position(at: 2.5).countInBeat, 3)
+        XCTAssertFalse(t.position(at: 4.0).isCountIn)
+    }
+
+    func testBarsSlotsAndSegments() throws {
+        let t = try timeline()
+        let p = t.position(at: 4 + 1.75)   // bar 0, beat 1, second half → slot 3
+        XCTAssertEqual(p.bar, 0)
+        XCTAssertEqual(p.beat, 1)
+        XCTAssertEqual(p.slot, 3)
+        XCTAssertEqual(p.slotFraction, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(t.position(at: 4 + 4.1).segmentIndex, 0)    // bar 1: still G
+        XCTAssertEqual(t.position(at: 4 + 8.1).segmentIndex, 1)    // bar 2: D
+        XCTAssertEqual(t.position(at: 4 + 12.1).segmentIndex, 0)   // loops back to G
+    }
+
+    func testChangeIsAnnouncedOnTheLastBeat() throws {
+        let t = try timeline()
+        XCTAssertFalse(t.position(at: 4 + 3.5).isChangeComing)    // bar 0 → bar 1 is still G
+        XCTAssertFalse(t.position(at: 4 + 6.5).isChangeComing)    // bar 1, beat 3
+        XCTAssertTrue(t.position(at: 4 + 7.5).isChangeComing)     // bar 1, beat 4 → D next
+        XCTAssertEqual(t.position(at: 4 + 7.5).nextSegmentIndex, 1)
+    }
+
+    func testFiniteRunEnds() throws {
+        let t = try timeline(totalBars: 4)
+        XCTAssertEqual(try XCTUnwrap(t.duration), 4 + 16, accuracy: 1e-9)
+        XCTAssertFalse(t.position(at: 19.9).isFinished)
+        XCTAssertTrue(t.position(at: 20.0).isFinished)
+        XCTAssertFalse(t.position(at: 4 + 15.5).isChangeComing, "No change announced at the very end")
+    }
+
+    func testSoundsFollowThePattern() throws {
+        let t = try timeline()
+        XCTAssertEqual(t.countInSounds.count, 4)
+        XCTAssertEqual(t.countInSounds.first?.sound, .clickAccent)
+        // 3 bars × (4 clicks + 6 strokes)
+        XCTAssertEqual(t.cycleSounds.count, 30)
+        let strums = t.cycleSounds.filter { !$0.isClick }
+        XCTAssertEqual(strums.prefix(6).map(\.sound), [.down("G"), .down("G"), .up("G"), .up("G"), .down("G"), .up("G")])
+        XCTAssertEqual(strums.last?.sound, .up("D"))
+        XCTAssertEqual(strums.first?.gain, 1, "Slot 0 is accented")
+    }
+
+    func testFramesDoNotDrift() throws {
+        let t = try timeline(bpm: 70)
+        // 1000 bars of eighth notes at 70 bpm, 48 kHz: exact to the sample.
+        let slots = 1000 * 8
+        let expected = Int((Double(slots) * 60 / 70 / 2 * 48_000).rounded())
+        XCTAssertEqual(t.frame(forSlot: slots, sampleRate: 48_000), expected)
+    }
+
+    func testRenderProgramIsSortedAndInsideTheCycle() throws {
+        let t = try timeline(bpm: 90)
+        let ids: [PracticeTimeline.SoundID] = [.clickAccent, .click, .down("G"), .up("G"), .down("D"), .up("D")]
+        let bank = SoundBank(ids: ids, samples: ids.map { _ in [Float](repeating: 0.1, count: 10) })
+        let program = RenderProgram(timeline: t, bank: bank, sampleRate: 44_100)
+        XCTAssertEqual(program.cycle.count, t.cycleSounds.count)
+        XCTAssertEqual(program.cycle.map(\.frame), program.cycle.map(\.frame).sorted())
+        XCTAssertTrue(program.cycle.allSatisfy { $0.frame < program.cycleFrames })
+        XCTAssertEqual(program.endFrame, .max)
+    }
+}

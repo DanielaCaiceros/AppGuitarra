@@ -1,0 +1,72 @@
+[
+  {
+    "id": "L01", "number": 1, "module": "Rhythm",
+    "title": "The pulse and downstrokes",
+    "summary": "Strum down on every beat and switch between E minor and A minor without losing the pulse.",
+    "chords": ["Em", "Am"],
+    "steps": [
+      { "type": "show", "title": "Meet E minor", "chord": "Em",
+        "text": "Two fingers, and all six strings ring. Watch where each finger goes, then copy the shape." },
+      { "type": "show", "title": "Meet A minor", "chord": "Am",
+        "text": "Am looks like Em moved down one string, plus your index finger. Skip the thickest string." },
+      { "type": "show", "title": "Strum on the beat", "pattern": "quarter-downs", "bpm": 70,
+        "text": "One downstroke on each click: 1, 2, 3, 4. Your hand still comes back up between beats, it just misses the strings." },
+      { "type": "practice", "title": "Play along", "pattern": "quarter-downs", "bpm": 70,
+        "progression": [ { "chord": "Em", "bars": 2 }, { "chord": "Am", "bars": 2 } ],
+        "text": "Two bars of Em, two bars of Am. If a change is late, keep strumming anyway: the pulse matters more than a perfect chord." },
+      { "type": "check", "title": "Check yourself", "bars": 4, "bpm": 70,
+        "goal": "4 bars at 70 bpm without losing the pulse" }
+    ]
+  },
+  {
+    "id": "L02", "number": 2, "module": "Rhythm",
+    "title": "Down-up eighth notes",
+    "summary": "Add upstrokes between the beats for a steady down-up motion.",
+    "chords": ["Em", "Am"],
+    "steps": [
+      { "type": "show", "title": "Down on the number, up on the \"and\"", "pattern": "eighths", "bpm": 80,
+        "text": "Count \"1 and 2 and 3 and 4 and\". Down on the numbers, up on every \"and\". Upstrokes are lighter: mostly the thin strings." },
+      { "type": "practice", "title": "Play along", "pattern": "eighths", "bpm": 80,
+        "progression": [ { "chord": "Em", "bars": 2 }, { "chord": "Am", "bars": 2 } ],
+        "text": "Keep your wrist loose and the motion even, like shaking water off your hand." },
+      { "type": "check", "title": "Check yourself", "bars": 4, "bpm": 80,
+        "goal": "↓↑↓↑ steady for 4 bars at 80 bpm" }
+    ]
+  },
+  {
+    "id": "L03", "number": 3, "module": "Rhythm",
+    "title": "The folk pattern",
+    "summary": "Learn ↓ ↓↑ ↑↓↑, the pattern behind countless acoustic pop songs.",
+    "chords": ["G", "D"],
+    "steps": [
+      { "type": "show", "title": "Meet G major", "chord": "G",
+        "text": "Three fingers spread across the neck. All six strings ring." },
+      { "type": "show", "title": "Meet D major", "chord": "D",
+        "text": "A small triangle on the thin strings. Start your strum on the 4th string." },
+      { "type": "show", "title": "↓ ↓↑ ↑↓↑", "pattern": "folk", "bpm": 70,
+        "text": "Your hand never stops: down-up on every beat. On the \"and\" of 1 and on beat 3 it moves without touching the strings." },
+      { "type": "practice", "title": "Play along", "pattern": "folk", "bpm": 70,
+        "progression": [ { "chord": "G", "bars": 2 }, { "chord": "D", "bars": 2 } ],
+        "text": "Say it out loud: \"down, down-up, up-down-up\". Start slow; speed comes on its own." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 70,
+        "goal": "8 bars of the folk pattern without stopping" }
+    ]
+  },
+  {
+    "id": "L10", "number": 10, "module": "Technique",
+    "title": "F with a partial barre",
+    "summary": "Get the F chord to ring on four strings, with an easy version to start.",
+    "chords": ["Fmaj7", "F", "C", "G"],
+    "steps": [
+      { "type": "show", "title": "The easy F first", "chord": "Fmaj7",
+        "text": "Fmaj7 sounds close to F and needs no barre. Use it in songs while the real F gets stronger." },
+      { "type": "show", "title": "F with a small barre", "chord": "F",
+        "text": "Lay your index finger flat across the two thinnest strings at fret 1. Roll it slightly onto its bony side so both strings ring." },
+      { "type": "practice", "title": "C → F → C → G", "pattern": "quarter-downs", "bpm": 60,
+        "progression": [ { "chord": "C", "bars": 1 }, { "chord": "F", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "G", "bars": 1 } ],
+        "text": "From C, your ring and middle fingers move up one string each, and your index flattens. Strum only the 4 thin strings on F." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 60,
+        "goal": "F rings on all 4 strings in time, twice through" }
+    ]
+  }
+]

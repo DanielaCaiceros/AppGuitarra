@@ -1,0 +1,6 @@
+[
+  { "id": "quarter-downs", "name": "Downstrokes on the beat", "strokes": "D-D-D-D-", "accents": [0] },
+  { "id": "eighths",       "name": "Down-up eighths",         "strokes": "DUDUDUDU", "accents": [0] },
+  { "id": "folk",          "name": "Folk pattern",            "strokes": "D-DU-UDU", "accents": [0] },
+  { "id": "backbeat",      "name": "Accents on 2 and 4",      "strokes": "D-DUD-DU", "accents": [2, 6] }
+]
