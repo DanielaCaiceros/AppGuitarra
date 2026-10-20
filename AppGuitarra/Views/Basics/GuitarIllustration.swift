@@ -2,8 +2,8 @@
 //  GuitarIllustration.swift
 //  AppGuitarra
 //
-//  An acoustic guitar drawn in code with numbered, tappable callouts for each part.
-//  Drawn in a 1000 × 480 design space and scaled to fit.
+//  Guitar illustration from Wikimedia Commons with numbered, tappable callouts
+//  for each part, drawn on top in code.
 //
 
 import SwiftUI
@@ -52,70 +52,89 @@ nonisolated enum GuitarPart: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Point on the guitar the callout points to (design space).
+    /// Point on the guitar the callout points to (design space, see `GuitarIllustration`).
     fileprivate var anchor: CGPoint {
         switch self {
-        case .headstock: CGPoint(x: 960, y: 240)
-        case .tuningPegs: CGPoint(x: 945, y: 296)
-        case .nut: CGPoint(x: 884, y: 212)
-        case .frets: CGPoint(x: 800, y: 212)
-        case .fretboard: CGPoint(x: 720, y: 268)
-        case .strings: CGPoint(x: 640, y: 222)
-        case .soundHole: CGPoint(x: 500, y: 184)
-        case .bridge: CGPoint(x: 195, y: 172)
-        case .body: CGPoint(x: 150, y: 350)
+        case .headstock: CGPoint(x: 262, y: 80)
+        case .tuningPegs: CGPoint(x: 305, y: 110)
+        case .nut: CGPoint(x: 246, y: 163)
+        case .frets: CGPoint(x: 246, y: 315.5)
+        case .fretboard: CGPoint(x: 215, y: 420)
+        case .strings: CGPoint(x: 196, y: 630)
+        case .soundHole: CGPoint(x: 207, y: 548)
+        case .bridge: CGPoint(x: 150, y: 685)
+        case .body: CGPoint(x: 285, y: 720)
         }
     }
 
-    /// Where the numbered badge sits (design space).
+    /// Where the numbered badge sits: left column x = 36, right column x = 404.
     fileprivate var badge: CGPoint {
         switch self {
-        case .headstock: CGPoint(x: 975, y: 400)
-        case .tuningPegs: CGPoint(x: 905, y: 420)
-        case .nut: CGPoint(x: 884, y: 110)
-        case .frets: CGPoint(x: 800, y: 110)
-        case .fretboard: CGPoint(x: 720, y: 400)
-        case .strings: CGPoint(x: 640, y: 110)
-        case .soundHole: CGPoint(x: 500, y: 40)
-        case .bridge: CGPoint(x: 195, y: 30)
-        case .body: CGPoint(x: 60, y: 450)
+        case .headstock: CGPoint(x: 36, y: 80)
+        case .tuningPegs: CGPoint(x: 404, y: 110)
+        case .nut: CGPoint(x: 404, y: 175)
+        case .frets: CGPoint(x: 404, y: 315)
+        case .fretboard: CGPoint(x: 36, y: 420)
+        case .strings: CGPoint(x: 36, y: 630)
+        case .soundHole: CGPoint(x: 404, y: 548)
+        case .bridge: CGPoint(x: 36, y: 740)
+        case .body: CGPoint(x: 404, y: 720)
         }
     }
 }
 
+/// Guitar illustration ("Acoustic guitar (mul).svg" by William Crochot, Wikimedia Commons,
+/// CC BY-SA 4.0, labels removed) with numbered, tappable callouts drawn on top.
+///
+/// Coordinates use the SVG's own space, widened to make room for the badges:
+/// the image occupies x 77.9…361.3, y 30.3…822.4 inside a 440 × 810 canvas starting at y = 20.
 struct GuitarIllustration: View {
     @Binding var selected: GuitarPart?
 
-    private static let designSize = CGSize(width: 1000, height: 480)
+    private static let design = CGRect(x: 0, y: 20, width: 440, height: 810)
+    private static let imageRect = CGRect(x: 77.9, y: 30.3, width: 283.4, height: 792.1)
+    static let credit = "Guitar illustration: William Crochot (Wikimedia Commons), CC BY-SA 4.0"
 
     var body: some View {
         GeometryReader { geometry in
-            let scale = min(geometry.size.width / Self.designSize.width, geometry.size.height / Self.designSize.height)
+            let scale = min(geometry.size.width / Self.design.width, geometry.size.height / Self.design.height)
             let origin = CGPoint(
-                x: (geometry.size.width - Self.designSize.width * scale) / 2,
-                y: (geometry.size.height - Self.designSize.height * scale) / 2
+                x: (geometry.size.width - Self.design.width * scale) / 2,
+                y: (geometry.size.height - Self.design.height * scale) / 2
             )
-            let map: (CGPoint) -> CGPoint = { CGPoint(x: origin.x + $0.x * scale, y: origin.y + $0.y * scale) }
+            let map: (CGPoint) -> CGPoint = {
+                CGPoint(x: origin.x + ($0.x - Self.design.minX) * scale,
+                        y: origin.y + ($0.y - Self.design.minY) * scale)
+            }
+            let imageOrigin = map(Self.imageRect.origin)
 
             ZStack(alignment: .topLeading) {
+                Image("GuitarParts")
+                    .resizable()
+                    .frame(width: Self.imageRect.width * scale, height: Self.imageRect.height * scale)
+                    .offset(x: imageOrigin.x, y: imageOrigin.y)
+                    .accessibilityHidden(true)
+
                 Canvas { context, _ in
-                    context.translateBy(x: origin.x, y: origin.y)
-                    context.scaleBy(x: scale, y: scale)
-                    drawGuitar(in: context)
-                    if let selected {
-                        drawHighlight(for: selected, in: context)
-                    }
                     for part in GuitarPart.allCases {
-                        var leader = Path()
-                        leader.move(to: part.badge)
-                        leader.addLine(to: part.anchor)
                         let isSelected = part == selected
-                        context.stroke(leader, with: isSelected ? .color(.accentColor) : .foreground,
-                                       style: StrokeStyle(lineWidth: isSelected ? 3 : 1.5, dash: isSelected ? [] : [5, 4]))
-                        let dot = CGRect(x: part.anchor.x - 5, y: part.anchor.y - 5, width: 10, height: 10)
-                        context.fill(Path(ellipseIn: dot), with: isSelected ? .color(.accentColor) : .foreground)
+                        let start = map(part.badge)
+                        let end = map(part.anchor)
+                        var leader = Path()
+                        leader.move(to: start)
+                        leader.addLine(to: end)
+                        context.stroke(
+                            leader,
+                            with: isSelected ? .color(.accentColor) : .color(.primary.opacity(0.55)),
+                            style: StrokeStyle(lineWidth: isSelected ? 3 : 1.5, lineCap: .round, dash: isSelected ? [] : [4, 4])
+                        )
+                        let radius: CGFloat = isSelected ? 9 : 5
+                        let dot = CGRect(x: end.x - radius, y: end.y - radius, width: radius * 2, height: radius * 2)
+                        context.fill(Path(ellipseIn: dot), with: isSelected ? .color(.accentColor) : .color(.white))
+                        context.stroke(Path(ellipseIn: dot), with: .color(isSelected ? .white : .accentColor), lineWidth: 2)
                     }
                 }
+                .allowsHitTesting(false)
 
                 ForEach(GuitarPart.allCases) { part in
                     let isSelected = part == selected
@@ -123,11 +142,12 @@ struct GuitarIllustration: View {
                         withAnimation(.snappy) { selected = isSelected ? nil : part }
                     } label: {
                         Text("\(part.number)")
-                            .font(.system(size: max(13, 20 * scale), weight: .bold, design: .rounded))
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .frame(width: max(30, 42 * scale), height: max(30, 42 * scale))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(isSelected ? .white : Color.accentColor)
+                            .frame(width: 40, height: 40)
                             .background(Circle().fill(isSelected ? Color.accentColor : Color(uiColor: .systemBackground)))
-                            .overlay(Circle().stroke(isSelected ? Color.accentColor : .primary, lineWidth: 2))
+                            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
                     }
                     .buttonStyle(.plain)
                     .position(map(part.badge))
@@ -135,126 +155,6 @@ struct GuitarIllustration: View {
                 }
             }
         }
-        .aspectRatio(Self.designSize.width / Self.designSize.height, contentMode: .fit)
-    }
-
-    // MARK: - Shapes (design space)
-
-    private var bodyPath: Path {
-        var path = Path()
-        path.addEllipse(in: CGRect(x: 60, y: 65, width: 380, height: 350))     // lower bout
-        path.addEllipse(in: CGRect(x: 380, y: 105, width: 280, height: 270))   // upper bout
-        return path
-    }
-    private let soundHoleRect = CGRect(x: 442, y: 182, width: 116, height: 116)
-    private let bridgeRect = CGRect(x: 175, y: 170, width: 40, height: 140)
-    private let fretboardRect = CGRect(x: 560, y: 210, width: 320, height: 60)
-    private let nutRect = CGRect(x: 880, y: 208, width: 9, height: 64)
-    private var headstockPath: Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 889, y: 202))
-        path.addLine(to: CGPoint(x: 990, y: 188))
-        path.addQuadCurve(to: CGPoint(x: 990, y: 292), control: CGPoint(x: 1004, y: 240))
-        path.addLine(to: CGPoint(x: 889, y: 278))
-        path.closeSubpath()
-        return path
-    }
-    private let pegXs: [CGFloat] = [915, 945, 975]
-    private func pegRect(_ index: Int) -> CGRect {
-        // Strings 6, 5, 4 → top pegs; 3, 2, 1 → bottom pegs.
-        let x = pegXs[index % 3]
-        let y: CGFloat = index < 3 ? 170 : 296
-        return CGRect(x: x - 11, y: y - 14, width: 22, height: 28)
-    }
-    private func stringY(_ index: Int) -> CGFloat { 218 + CGFloat(index) * 8.8 }
-    private func fretX(_ fret: Int) -> CGFloat { 880 - 568 * (1 - pow(2, -CGFloat(fret) / 12)) }
-
-    private func stringsPath(for index: Int) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 200, y: stringY(index)))
-        path.addLine(to: CGPoint(x: 884, y: stringY(index)))
-        let peg = pegRect(index)
-        path.addLine(to: CGPoint(x: peg.midX, y: index < 3 ? 222 : 258))
-        return path
-    }
-
-    private func drawGuitar(in context: GraphicsContext) {
-        let wood = Color(red: 0.86, green: 0.62, blue: 0.36)
-        let darkWood = Color(red: 0.36, green: 0.20, blue: 0.10)
-
-        context.fill(bodyPath, with: .color(wood))
-        context.stroke(bodyPath, with: .color(darkWood.opacity(0.35)), lineWidth: 3)
-
-        // Sound hole with rosette
-        context.stroke(Path(ellipseIn: soundHoleRect.insetBy(dx: -10, dy: -10)), with: .color(darkWood.opacity(0.6)), lineWidth: 6)
-        context.fill(Path(ellipseIn: soundHoleRect), with: .color(Color(white: 0.1)))
-
-        // Bridge
-        context.fill(Path(roundedRect: bridgeRect, cornerRadius: 8), with: .color(darkWood))
-        context.fill(Path(CGRect(x: 198, y: 205, width: 4, height: 70)), with: .color(Color(white: 0.95)))
-
-        // Neck, fretboard, frets and inlays
-        context.fill(Path(fretboardRect), with: .color(darkWood))
-        for fret in 1...14 {
-            var line = Path()
-            line.move(to: CGPoint(x: fretX(fret), y: fretboardRect.minY))
-            line.addLine(to: CGPoint(x: fretX(fret), y: fretboardRect.maxY))
-            context.stroke(line, with: .color(Color(white: 0.8)), lineWidth: 2.5)
-        }
-        for fret in [3, 5, 7, 9] {
-            let x = (fretX(fret) + fretX(fret - 1)) / 2
-            context.fill(Path(ellipseIn: CGRect(x: x - 5, y: 235, width: 10, height: 10)), with: .color(.white.opacity(0.8)))
-        }
-
-        // Headstock, nut, pegs
-        context.fill(headstockPath, with: .color(darkWood))
-        context.fill(Path(nutRect), with: .color(Color(white: 0.95)))
-        for index in 0..<6 {
-            let peg = pegRect(index)
-            context.fill(Path(roundedRect: peg, cornerRadius: 8), with: .color(Color(white: 0.85)))
-            context.stroke(Path(roundedRect: peg, cornerRadius: 8), with: .color(Color(white: 0.55)), lineWidth: 1.5)
-        }
-
-        // Strings: thicker for lower strings
-        for index in 0..<6 {
-            context.stroke(stringsPath(for: index), with: .color(Color(white: 0.92)), lineWidth: 2.6 - CGFloat(index) * 0.32)
-        }
-    }
-
-    private func drawHighlight(for part: GuitarPart, in context: GraphicsContext) {
-        let accent = Color.accentColor
-        let glow = GraphicsContext.Shading.color(accent.opacity(0.35))
-        switch part {
-        case .body:
-            context.fill(bodyPath, with: glow)
-        case .soundHole:
-            context.stroke(Path(ellipseIn: soundHoleRect), with: .color(accent), lineWidth: 6)
-        case .bridge:
-            context.fill(Path(roundedRect: bridgeRect, cornerRadius: 8), with: glow)
-            context.stroke(Path(roundedRect: bridgeRect, cornerRadius: 8), with: .color(accent), lineWidth: 4)
-        case .fretboard:
-            context.fill(Path(fretboardRect), with: glow)
-            context.stroke(Path(fretboardRect), with: .color(accent), lineWidth: 4)
-        case .frets:
-            for fret in 1...14 {
-                var line = Path()
-                line.move(to: CGPoint(x: fretX(fret), y: fretboardRect.minY - 4))
-                line.addLine(to: CGPoint(x: fretX(fret), y: fretboardRect.maxY + 4))
-                context.stroke(line, with: .color(accent), lineWidth: 4)
-            }
-        case .nut:
-            context.stroke(Path(nutRect.insetBy(dx: -3, dy: -3)), with: .color(accent), lineWidth: 4)
-        case .headstock:
-            context.fill(headstockPath, with: glow)
-            context.stroke(headstockPath, with: .color(accent), lineWidth: 4)
-        case .tuningPegs:
-            for index in 0..<6 {
-                context.stroke(Path(roundedRect: pegRect(index).insetBy(dx: -3, dy: -3), cornerRadius: 10), with: .color(accent), lineWidth: 4)
-            }
-        case .strings:
-            for index in 0..<6 {
-                context.stroke(stringsPath(for: index), with: .color(accent), lineWidth: 3)
-            }
-        }
+        .aspectRatio(Self.design.width / Self.design.height, contentMode: .fit)
     }
 }

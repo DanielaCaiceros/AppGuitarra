@@ -20,11 +20,24 @@ struct GuitarBasicsView: View {
                         .foregroundStyle(.secondary)
 
                     BasicsSection(number: 1, title: "Parts of the guitar",
-                                  subtitle: "Tap a number to learn what each part does.") {
-                        VStack(spacing: 16) {
-                            GuitarIllustration(selected: $selectedPart)
-                                .frame(maxHeight: 420)
-                            partDetail
+                                  subtitle: "Tap a number on the guitar, or a name in the list, to learn what each part does.") {
+                        HStack(alignment: .top, spacing: 28) {
+                            VStack(spacing: 6) {
+                                GuitarIllustration(selected: $selectedPart)
+                                    .frame(height: 600)
+                                Text(GuitarIllustration.credit)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(maxWidth: 340)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(GuitarPart.allCases) { part in
+                                    partRow(part)
+                                }
+                                partDetail
+                                    .padding(.top, 8)
+                            }
                         }
                     }
 
@@ -101,6 +114,30 @@ struct GuitarBasicsView: View {
             Text("Tap a number on the guitar.")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func partRow(_ part: GuitarPart) -> some View {
+        let isSelected = part == selectedPart
+        return Button {
+            withAnimation(.snappy) { selectedPart = isSelected ? nil : part }
+        } label: {
+            HStack(spacing: 12) {
+                Text("\(part.number)")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(isSelected ? .white : Color.accentColor)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(isSelected ? Color.accentColor : Color.accentColor.opacity(0.12)))
+                Text(part.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? Color.accentColor.opacity(0.1) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func fingerRow(_ badge: String, _ text: String) -> some View {

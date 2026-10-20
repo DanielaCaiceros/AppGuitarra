@@ -38,6 +38,8 @@ final class TunerEngine {
     @ObservationIgnored private let engine = AVAudioEngine()
     private var state = TuningState()
     @ObservationIgnored private var silentBuffers = 0
+    @ObservationIgnored private var continuation: AsyncStream<Double?>.Continuation?
+    @ObservationIgnored private var listenTask: Task<Void, Never>?
 
     func start() async {
         guard status != .listening else { return }
@@ -58,8 +60,16 @@ final class TunerEngine {
             guard format.sampleRate > 0, format.channelCount > 0 else { throw TunerError.noInput }
 
             let analyzer = PitchAnalyzer(sampleRate: format.sampleRate)
-            Self.installTap(on: input, format: format, analyzer: analyzer) { [weak self] frequency in
-                Task { @MainActor in self?.handle(frequency) }
+            // The audio thread pushes detections into a stream; the main actor reads them.
+            let (stream, continuation) = AsyncStream.makeStream(of: Double?.self, bufferingPolicy: .bufferingNewest(4))
+            self.continuation = continuation
+            Self.installTap(on: input, format: format, analyzer: analyzer) { frequency in
+                continuation.yield(frequency)
+            }
+            listenTask = Task { [weak self] in
+                for await frequency in stream {
+                    self?.handle(frequency)
+                }
             }
 
             engine.prepare()
@@ -67,6 +77,7 @@ final class TunerEngine {
             status = .listening
         } catch {
             engine.inputNode.removeTap(onBus: 0)
+            finishStream()
             status = .failed(error.localizedDescription)
         }
     }
@@ -75,10 +86,18 @@ final class TunerEngine {
         guard status == .listening else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        finishStream()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         status = .idle
         output = nil
         state.reset()
+    }
+
+    private func finishStream() {
+        continuation?.finish()
+        continuation = nil
+        listenTask?.cancel()
+        listenTask = nil
     }
 
     private func handle(_ frequency: Double?) {

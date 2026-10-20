@@ -90,6 +90,16 @@ struct FretboardView: View {
 
     // MARK: - Board
 
+    /// "6 E": small string number followed by the string name.
+    private func stringLabel(_ info: StringInfo, size: CGFloat) -> Text {
+        let number = Text("\(info.number) ")
+            .font(.system(size: size * 0.3))
+            .foregroundStyle(.secondary)
+        let name = Text(info.shortName)
+            .font(.system(size: size * 0.42, weight: .semibold))
+        return Text("\(number)\(name)")
+    }
+
     private func drawBoard(in context: GraphicsContext, layout: Layout) {
         let board = layout.boardRect
         let wood = Gradient(colors: [
@@ -155,8 +165,7 @@ struct FretboardView: View {
             let markerX = layout.labelWidth * 0.8
             let info = StringInfo.all[index]
             context.draw(
-                Text("\(info.number) ").font(.system(size: layout.stringSpacing * 0.3)).foregroundStyle(.secondary)
-                    + Text(info.shortName).font(.system(size: layout.stringSpacing * 0.42, weight: .semibold)),
+                stringLabel(info, size: layout.stringSpacing),
                 at: CGPoint(x: labelX, y: y)
             )
             let markerText: String? = chord.isMuted(index) ? "×" : (chord.isOpen(index) ? "○" : nil)

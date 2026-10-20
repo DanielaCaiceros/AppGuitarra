@@ -5,8 +5,13 @@
 //  Fretting hand (left hand, palm facing you) with the finger numbers
 //  used in every chord diagram: 1 index, 2 middle, 3 ring, 4 pinky, T thumb.
 //
+//  Uses the "HandIllustration" image (AI-generated, no numbers) when it is in the
+//  asset catalog; the numbers are always drawn by code so they are exact.
+//  Falls back to a simple drawn hand if the image is missing.
+//
 
 import SwiftUI
+import UIKit
 
 struct HandDiagram: View {
     /// Finger to emphasize (1...4), or nil.
@@ -28,7 +33,52 @@ struct HandDiagram: View {
         Finger(label: "1", number: 1, rect: CGRect(x: 188, y: 54, width: 40, height: 156)),
     ]
 
+    /// Fingertip positions in the illustration, as fractions of its width and height.
+    private struct Tip {
+        let label: String
+        let number: Int?
+        let point: CGPoint
+    }
+
+    private static let fingertips: [Tip] = [
+        Tip(label: "4", number: 4, point: CGPoint(x: 0.205, y: 0.28)),
+        Tip(label: "3", number: 3, point: CGPoint(x: 0.32, y: 0.17)),
+        Tip(label: "2", number: 2, point: CGPoint(x: 0.465, y: 0.11)),
+        Tip(label: "1", number: 1, point: CGPoint(x: 0.62, y: 0.165)),
+        Tip(label: "T", number: nil, point: CGPoint(x: 0.78, y: 0.45)),
+    ]
+
     var body: some View {
+        if let image = UIImage(named: "HandIllustration") {
+            illustrated(image)
+        } else {
+            drawn
+        }
+    }
+
+    private func illustrated(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .overlay {
+                GeometryReader { geometry in
+                    let size = geometry.size
+                    ForEach(Self.fingertips, id: \.label) { tip in
+                        FingerBadge(label: tip.label, isOn: isOn(tip), width: size.width)
+                            .position(x: tip.point.x * size.width, y: tip.point.y * size.height)
+                    }
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Left hand finger numbers: 1 index, 2 middle, 3 ring, 4 pinky, T thumb")
+    }
+
+    private func isOn(_ tip: Tip) -> Bool {
+        guard let number = tip.number else { return false }
+        return highlighted == nil || number == highlighted
+    }
+
+    private var drawn: some View {
         Canvas { context, size in
             let scale = min(size.width / Self.designSize.width, size.height / Self.designSize.height)
             context.translateBy(x: (size.width - Self.designSize.width * scale) / 2,
@@ -78,6 +128,28 @@ struct HandDiagram: View {
                 .foregroundStyle(filled ? Color.white : Color.accentColor),
             at: center
         )
+    }
+}
+
+/// Numbered circle drawn over a fingertip.
+private struct FingerBadge: View {
+    let label: String
+    let isOn: Bool
+    /// Width of the hand illustration; the badge scales with it.
+    let width: CGFloat
+
+    var body: some View {
+        let diameter: CGFloat = max(24, width * 0.11)
+        let fontSize: CGFloat = max(14, width * 0.06)
+        let fill: Color = isOn ? .accentColor : .white
+        let textColor: Color = isOn ? .white : .accentColor
+        return Text(label)
+            .font(.system(size: fontSize, weight: .bold, design: .rounded))
+            .foregroundStyle(textColor)
+            .frame(width: diameter, height: diameter)
+            .background(Circle().fill(fill))
+            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
     }
 }
 
