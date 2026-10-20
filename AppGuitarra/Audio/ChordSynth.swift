@@ -43,11 +43,8 @@ final class ChordSynth {
 
     private func play(midiNotes: [Int?], key: String, stringDelay: Double) {
         do {
-            let session = AVAudioSession.sharedInstance()
-            if session.category != .playback {
-                try session.setCategory(.playback, mode: .default)
-            }
-            try session.setActive(true)
+            // Keeps play-and-record if the microphone is listening (chord check).
+            try AudioSessionHelper.activate(recording: false)
             if !engine.isRunning {
                 try engine.start()
             }

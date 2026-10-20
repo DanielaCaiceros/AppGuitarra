@@ -46,7 +46,8 @@ final class PracticeEngine {
         timeline?.position(at: elapsed())
     }
 
-    func start(_ config: PracticeConfig) async {
+    /// - Parameter recording: keep the microphone usable (lesson checks listen while the click plays).
+    func start(_ config: PracticeConfig, recording: Bool = false) async {
         stop()
         runID += 1
         let run = runID
@@ -55,8 +56,7 @@ final class PracticeEngine {
 
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
-            try session.setActive(true)
+            try AudioSessionHelper.activate(recording: recording)
             sampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
             if sampleRate <= 0 { sampleRate = session.sampleRate > 0 ? session.sampleRate : 48_000 }
             latency = session.outputLatency + session.ioBufferDuration

@@ -20,6 +20,7 @@ struct LessonPlayerView: View {
     @State private var tempo: DemoSpeed = .medium
     @State private var checkTempo: DemoSpeed = .normal
     @State private var checkFinished = false
+    @State private var checkResult: CheckResult?
     @State private var isComplete = false
     @State private var slowerNotice: String?
 
@@ -144,7 +145,7 @@ struct LessonPlayerView: View {
             Label(check.goal, systemImage: "target")
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Color.accentColor)
-            Text("Press Start, play along after the count-in, then tell us how it went.")
+            Text("Press Start and play along after the count-in. The mic listens to every bar; you get the final say.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -156,36 +157,22 @@ struct LessonPlayerView: View {
                 targetBpm: check.bpm,
                 mode: .check(bars: check.bars),
                 tempo: $checkTempo,
-                onFinish: { withAnimation { checkFinished = true } }
+                onFinish: { result in
+                    withAnimation {
+                        checkResult = result
+                        checkFinished = true
+                    }
+                }
             )
         }
 
         if checkFinished {
-            VStack(spacing: 16) {
-                Text("Did you make it?")
-                    .font(.title.weight(.bold))
-                HStack(spacing: 20) {
-                    Button {
-                        backToPracticeSlower()
-                    } label: {
-                        Label("Not yet", systemImage: "arrow.uturn.backward")
-                            .font(.title2.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 60)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        complete()
-                    } label: {
-                        Label("Yes, nailed it!", systemImage: "checkmark")
-                            .font(.title2.weight(.bold))
-                            .frame(maxWidth: .infinity, minHeight: 60)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-            .padding(24)
-            .background(RoundedRectangle(cornerRadius: 20).fill(Color.accentColor.opacity(0.1)))
+            CheckVerdictPanel(
+                result: checkResult,
+                onRetry: { withAnimation { checkFinished = false; checkResult = nil } },
+                onSlower: backToPracticeSlower,
+                onComplete: complete
+            )
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -244,6 +231,7 @@ struct LessonPlayerView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             stepIndex = index
             checkFinished = false
+            checkResult = nil
             if lesson.steps[index].kind != .practice { slowerNotice = nil }
         }
     }
@@ -305,6 +293,116 @@ struct TrailingIconLabelStyle: LabelStyle {
         HStack(spacing: 8) {
             configuration.title
             configuration.icon
+        }
+    }
+}
+
+/// End of a check: what the mic heard (if it listened) and what to do next.
+struct CheckVerdictPanel: View {
+    let result: CheckResult?
+    let onRetry: () -> Void
+    let onSlower: () -> Void
+    let onComplete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            if let result {
+                micSummary(result)
+            } else {
+                Text("Did you make it?")
+                    .font(.title.weight(.bold))
+            }
+            buttons
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 20).fill(tint.opacity(0.1)))
+    }
+
+    private var tint: Color {
+        guard let result else { return .accentColor }
+        return result.passed ? .green : .orange
+    }
+
+    @ViewBuilder
+    private func micSummary(_ result: CheckResult) -> some View {
+        Label(result.passed ? "Nailed it!" : "Almost there", systemImage: result.passed ? "checkmark.seal.fill" : "ear")
+            .font(.largeTitle.weight(.bold))
+            .foregroundStyle(tint)
+        Text("The mic heard \(result.cleanBars) of \(result.bars.count) clean bars (goal: \(result.neededBars)).")
+            .font(.title3)
+        HStack(spacing: 10) {
+            ForEach(result.bars, id: \.bar) { bar in
+                VStack(spacing: 4) {
+                    Image(systemName: symbol(bar.outcome))
+                        .font(.title2)
+                        .foregroundStyle(bar.isClean ? Color.green : Color.orange)
+                    Text(bar.expected)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 36)
+                .accessibilityLabel("Bar \(bar.bar + 1), \(bar.expected): \(description(bar.outcome))")
+            }
+        }
+        if let advice = result.advice {
+            Label(advice, systemImage: "lightbulb")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        HStack(spacing: 20) {
+            if let result, result.passed {
+                button("Try again", systemImage: "arrow.counterclockwise", prominent: false, action: onRetry)
+                button("Continue", systemImage: "checkmark", prominent: true, action: onComplete)
+            } else if result != nil {
+                button("I made it anyway", systemImage: "hand.thumbsup", prominent: false, action: onComplete)
+                button("Practice slower", systemImage: "tortoise.fill", prominent: true, action: onSlower)
+            } else {
+                button("Not yet", systemImage: "arrow.uturn.backward", prominent: false, action: onSlower)
+                button("Yes, nailed it!", systemImage: "checkmark", prominent: true, action: onComplete)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func button(_ title: String, systemImage: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        if prominent {
+            Button(action: action) {
+                Label(title, systemImage: systemImage)
+                    .font(.title2.weight(.bold))
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            Button(action: action) {
+                Label(title, systemImage: systemImage)
+                    .font(.title2.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func symbol(_ outcome: BarResult.Outcome) -> String {
+        switch outcome {
+        case .clean: "checkmark.circle.fill"
+        case .wrongChord: "arrow.left.arrow.right.circle.fill"
+        case .messy: "waveform.badge.exclamationmark"
+        case .silent: "speaker.slash.circle.fill"
+        }
+    }
+
+    private func description(_ outcome: BarResult.Outcome) -> String {
+        switch outcome {
+        case .clean: "clean"
+        case .wrongChord(let heard): "sounded like \(heard)"
+        case .messy: "unclear"
+        case .silent: "too quiet"
         }
     }
 }

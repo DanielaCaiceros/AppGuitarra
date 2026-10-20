@@ -81,23 +81,26 @@ struct ChordDetailView: View {
 
     var body: some View {
         ScrollView {
-            HStack(alignment: .top, spacing: 40) {
-                VStack(spacing: 12) {
-                    ChordDiagramView(chord: chord)
-                        .frame(width: 180)
-                    Text(chord.name)
-                        .font(.headline)
-                    Text("Notes: " + chord.pitchClasses.sorted().map { NoteName.sharps[$0] }.joined(separator: " · "))
-                        .font(.subheadline.monospaced())
-                        .foregroundStyle(.secondary)
-                    Button {
-                        showsGuide = true
-                    } label: {
-                        Label("How to read this", systemImage: "questionmark.circle")
+            VStack(alignment: .leading, spacing: 32) {
+                HStack(alignment: .top, spacing: 40) {
+                    VStack(spacing: 12) {
+                        ChordDiagramView(chord: chord)
+                            .frame(width: 180)
+                        Text(chord.name)
+                            .font(.headline)
+                        Text("Notes: " + chord.pitchClasses.sorted().map { NoteName.sharps[$0] }.joined(separator: " · "))
+                            .font(.subheadline.monospaced())
+                            .foregroundStyle(.secondary)
+                        Button {
+                            showsGuide = true
+                        } label: {
+                            Label("How to read this", systemImage: "questionmark.circle")
+                        }
+                        .padding(.top, 8)
                     }
-                    .padding(.top, 8)
+                    AnimatedChordView(chord: chord, restartToken: demoRestart)
                 }
-                AnimatedChordView(chord: chord, restartToken: demoRestart)
+                ChordCheckPanel(chord: chord)
             }
             .padding(40)
         }

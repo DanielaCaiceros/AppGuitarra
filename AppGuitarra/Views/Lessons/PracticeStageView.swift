@@ -28,9 +28,18 @@ struct PracticeStageView: View {
     let targetBpm: Int
     let mode: PracticeMode
     @Binding var tempo: DemoSpeed
-    var onFinish: () -> Void = {}
+    /// Called when a check ends. The result is nil when the microphone was not used.
+    var onFinish: (CheckResult?) -> Void = { _ in }
 
     @State private var engine = PracticeEngine()
+    @State private var listener = ChordListener()
+    @State private var scorer: CheckScorer?
+    /// Latest microphone verdict while checking: true = the right chord is ringing.
+    @State private var liveMatch: Bool?
+    @AppStorage("micCheck") private var micCheck = true
+    @AppStorage("detectionTolerance") private var tolerance: DetectionTolerance = .normal
+
+    private var isCheck: Bool { mode.checkBars != nil }
 
     private func bpm(for speed: DemoSpeed) -> Int {
         mode.checkBars != nil ? targetBpm : max(30, Int((Double(targetBpm) * speed.rate).rounded()))
@@ -51,14 +60,31 @@ struct PracticeStageView: View {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
             }
+            if isCheck, micCheck {
+                switch listener.status {
+                case .permissionDenied:
+                    Label("Microphone access is off, so you'll rate yourself. You can allow it in Settings.", systemImage: "mic.slash")
+                        .foregroundStyle(.secondary)
+                case .failed(let message):
+                    Label("Microphone unavailable: \(message)", systemImage: "mic.slash")
+                        .foregroundStyle(.secondary)
+                case .idle, .listening:
+                    EmptyView()
+                }
+            }
         }
         .onAppear {
             // In a check you play alone; elsewhere the guide guitar plays along.
             engine.guideOn = mode.checkBars == nil
         }
-        .onDisappear { engine.stop() }
+        .onDisappear { stopAll() }
         .onChange(of: engine.didFinish) { _, finished in
-            if finished { onFinish() }
+            guard finished else { return }
+            let result = scorer?.result
+            listener.stop()
+            scorer = nil
+            liveMatch = nil
+            onFinish(result)
         }
         .onChange(of: tempo) {
             if engine.isRunning { Task { await engine.start(config) } }
@@ -123,6 +149,10 @@ struct PracticeStageView: View {
             }
 
             Spacer()
+
+            if listener.isListening {
+                micBadge
+            }
 
             VStack(alignment: .trailing, spacing: 6) {
                 beatDots(position)
@@ -204,8 +234,29 @@ struct PracticeStageView: View {
         }
     }
 
+    private var micBadge: some View {
+        HStack(spacing: 8) {
+            Image(systemName: liveMatch == true ? "checkmark.circle.fill" : "mic.fill")
+                .foregroundStyle(liveMatch == true ? Color.green : Color.secondary)
+            ProgressView(value: Double(listener.level))
+                .frame(width: 60)
+                .tint(liveMatch == true ? .green : .accentColor)
+        }
+        .font(.title2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.secondary.opacity(0.1)))
+        .accessibilityLabel(liveMatch == true ? "Right chord heard" : "Listening")
+    }
+
     private var soundToggles: some View {
         HStack(spacing: 10) {
+            if isCheck {
+                Toggle(isOn: $micCheck) {
+                    Label("Mic check", systemImage: micCheck ? "mic.fill" : "mic.slash")
+                }
+                .disabled(engine.isRunning)
+            }
             Toggle(isOn: $engine.clickOn) {
                 Label("Click", systemImage: "metronome.fill")
             }
@@ -222,9 +273,9 @@ struct PracticeStageView: View {
     private var startButton: some View {
         Button {
             if engine.isRunning {
-                engine.stop()
+                stopAll()
             } else {
-                Task { await engine.start(config) }
+                Task { await start() }
             }
         } label: {
             Label(
@@ -237,6 +288,43 @@ struct PracticeStageView: View {
         .buttonStyle(.borderedProminent)
         .tint(engine.isRunning ? .red : .accentColor)
         .controlSize(.extraLarge)
+    }
+}
+
+// MARK: - Microphone check
+
+extension PracticeStageView {
+    private func start() async {
+        guard isCheck, micCheck else {
+            await engine.start(config)
+            return
+        }
+        await listener.start()
+        guard listener.isListening else {
+            // No permission or no mic: the check still runs, and you rate yourself.
+            await engine.start(config)
+            return
+        }
+        let chords = (try? ChordLibrary.loadChords()) ?? segments.map(\.chord)
+        let judge = ChordJudge(chords: chords, tolerance: tolerance)
+        scorer = CheckScorer(timeline: PracticeTimeline(config: config))
+        listener.onFrame = { frame in
+            guard engine.isRunning else { return }
+            let time = engine.elapsed()
+            guard let bar = scorer?.bar(at: time), let expected = scorer?.expectedChord(inBar: bar) else { return }
+            let verdict = judge.verdict(frame, expected: expected)
+            scorer?.add(verdict, at: time)
+            if verdict != .silence { liveMatch = verdict.isMatch }
+        }
+        await engine.start(config, recording: true)
+        if !engine.isRunning { stopAll() }
+    }
+
+    private func stopAll() {
+        engine.stop()
+        listener.stop()
+        scorer = nil
+        liveMatch = nil
     }
 }
 
