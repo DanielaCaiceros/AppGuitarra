@@ -48,8 +48,13 @@ nonisolated struct CatalogSong: Codable, Hashable, Sendable, Identifiable {
     let title: String
     let artist: String
     let capo: Int
-    /// Approximate tempo of the recording.
+    /// Tempo of the recording, in the beat the strum pattern counts
+    /// (half time or dotted quarters when `bpmNote` says so).
     let bpm: Int
+    /// Checked against tempo databases (songbpm.com, tunebat, getsongbpm).
+    let bpmChecked: Bool?
+    /// How the tempo was counted, or why it needs checking by ear.
+    let bpmNote: String?
     let pattern: String
     let source: Source
     let note: String?

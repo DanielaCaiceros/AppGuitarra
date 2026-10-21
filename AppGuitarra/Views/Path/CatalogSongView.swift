@@ -52,7 +52,7 @@ struct CatalogSongView: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 badge(song.capo == 0 ? "No capo" : "Capo \(song.capo)", systemImage: "guitars")
-                badge("~\(song.bpm) bpm", systemImage: "metronome")
+                badge(song.bpmChecked == true ? "\(song.bpm) bpm" : "~\(song.bpm) bpm", systemImage: "metronome")
                 badge(content.lessons.patterns[song.pattern]?.name ?? song.pattern, systemImage: "arrow.up.arrow.down")
                 sourceBadge
             }
@@ -63,6 +63,11 @@ struct CatalogSongView: View {
             }
             if let note = song.note {
                 Label(note, systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let tempoNote = song.bpmNote {
+                Label(tempoNote, systemImage: "metronome")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -597,6 +597,11 @@ private struct StrumPanel: View {
                       : "Guessed from where the song's hits fall: down on the beat, up on the \"and\". If the arrows feel off by a beat, use Move the 1.",
                       systemImage: guess.confidence < 0.25 ? "questionmark.circle" : "info.circle")
                     .foregroundStyle(.secondary)
+                if guess.strokes.contains("x") {
+                    Label("x = chuck: those hits die at once, so the strings are muted with the strumming hand or the fretting hand.",
+                          systemImage: "hand.raised")
+                        .foregroundStyle(.secondary)
+                }
             }
             .font(.subheadline)
         } else {

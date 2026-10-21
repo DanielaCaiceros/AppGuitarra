@@ -11,7 +11,11 @@
 //     break ties.
 //  3. The eighths are folded into one bar and averaged over the whole song.
 //     Slots that are clearly hit become strokes. Up or down can't be heard
-//     reliably, so it follows the usual rule: down on the beat, up on the "and".
+//     reliably yet, so it follows the usual rule: down on the beat, up on the
+//     "and" (the hand keeps moving like a pendulum).
+//  4. Chucks (x): a muted strum is a short burst that dies at once, while a
+//     strummed chord keeps ringing. With the audio, slots whose hits die within
+//     ~70 ms in most bars become "x".
 //
 //  Drums and vocals also make onsets, so it is a guess: the user can pick
 //  another pattern and move the "1".
@@ -29,12 +33,16 @@ nonisolated struct StrumGuess: Codable, Hashable, Sendable {
     let slotStrengths: [Double]
     /// 0...1: how clearly the hit slots stand out from the missed ones.
     let confidence: Double
+    /// Per slot, 0...1: how much its hits sound muted (chucks). Nil without audio.
+    var slotMuting: [Double]? = nil
 }
 
 nonisolated enum StrumDetector {
     static let slotsPerBar = 8
     /// A slot counts as played when it reaches this share of the strongest slot.
     static let playedShare = 0.5
+    /// A played slot becomes a chuck when its hits sound this muted on average.
+    static let chuckShare = 0.6
 
     /// - Parameters:
     ///   - onsets: onset curve, one value per hop.
@@ -46,7 +54,8 @@ nonisolated enum StrumDetector {
         bpm: Double,
         beatOffset: Double,
         chords: [SongChord],
-        duration: Double
+        duration: Double,
+        audio: (samples: [Float], sampleRate: Double)? = nil
     ) -> StrumGuess? {
         guard bpm > 0, !onsets.isEmpty, duration > 0 else { return nil }
         let beat = 60 / bpm
@@ -59,6 +68,9 @@ nonisolated enum StrumDetector {
         // Strength of each eighth on the grid (nil where there is no chord).
         let reach = min(0.05, slot * 0.3)
         var strengths = [Double?](repeating: nil, count: count)
+        var muting = [Double?](repeating: nil, count: count)
+        // Chucks are judged on a window of 120 ms: only when the next eighth comes later.
+        let canHearMuting = audio != nil && slot >= 0.14
         for k in 0..<count {
             let time = first + Double(k) * slot
             if let index = chordIndex(chords, at: time), chords[index].isNoChord { continue }
@@ -66,8 +78,16 @@ nonisolated enum StrumDetector {
             let high = min(onsets.count - 1, Int(((time + reach - frameTime) / hopSeconds).rounded(.up)))
             guard low <= high else { continue }
             var peak: Float = 0
-            for i in low...high { peak = max(peak, onsets[i]) }
+            var peakIndex = low
+            for i in low...high where onsets[i] > peak {
+                peak = onsets[i]
+                peakIndex = i
+            }
             strengths[k] = Double(peak)
+            if canHearMuting, let audio, peak > 0 {
+                muting[k] = Self.muting(samples: audio.samples, sampleRate: audio.sampleRate,
+                                        at: frameTime + Double(peakIndex) * hopSeconds)
+            }
         }
 
         let phase = downbeatPhase(chords: chords, first: first, beat: beat, strengths: strengths)
@@ -86,7 +106,27 @@ nonisolated enum StrumDetector {
         means = means.map { $0 / peak }
 
         let played = (0..<slotsPerBar).map { $0 == 0 || means[$0] >= playedShare }
-        let strokes = String((0..<slotsPerBar).map { played[$0] ? ($0 % 2 == 0 ? "D" : "U") : "-" })
+
+        // Muting per slot, from the bars where that slot was clearly hit.
+        var slotMuting: [Double]?
+        if canHearMuting {
+            let strongest = strengths.compactMap { $0 }.max() ?? 0
+            var muteSums = [Double](repeating: 0, count: slotsPerBar)
+            var muteCounts = [Int](repeating: 0, count: slotsPerBar)
+            for k in 0..<count {
+                guard let value = strengths[k], let mute = muting[k], value >= 0.3 * strongest else { continue }
+                let barSlot = ((k - 2 * phase) % slotsPerBar + slotsPerBar) % slotsPerBar
+                muteSums[barSlot] += mute
+                muteCounts[barSlot] += 1
+            }
+            slotMuting = (0..<slotsPerBar).map { muteCounts[$0] >= 2 ? muteSums[$0] / Double(muteCounts[$0]) : 0 }
+        }
+
+        let strokes = String((0..<slotsPerBar).map { index -> Character in
+            guard played[index] else { return "-" }
+            if index != 0, let slotMuting, slotMuting[index] >= chuckShare { return "x" }
+            return index % 2 == 0 ? "D" : "U"
+        })
 
         let hit = (0..<slotsPerBar).filter { played[$0] }.map { means[$0] }
         let missed = (0..<slotsPerBar).filter { !played[$0] }.map { means[$0] }
@@ -104,8 +144,27 @@ nonisolated enum StrumDetector {
             accents: accents,
             barOffset: first + Double(phase) * beat,
             slotStrengths: means,
-            confidence: confidence
+            confidence: confidence,
+            slotMuting: slotMuting
         )
+    }
+
+    /// 0...1: how muted a hit at `time` sounds. A chuck's burst is gone within
+    /// ~70 ms; a strummed chord is still ringing. Compares the energy 70–120 ms
+    /// after the hit with the first 30 ms.
+    static func muting(samples: [Float], sampleRate: Double, at time: Double) -> Double? {
+        func energy(_ from: Double, _ to: Double) -> Double? {
+            let start = Int((time + from) * sampleRate)
+            let end = Int((time + to) * sampleRate)
+            guard start >= 0, end <= samples.count, end > start else { return nil }
+            var sum = 0.0
+            for i in start..<end { sum += Double(samples[i]) * Double(samples[i]) }
+            return sum / Double(end - start)
+        }
+        guard let attack = energy(-0.005, 0.03), attack > 0, let tail = energy(0.07, 0.12) else { return nil }
+        let ratio = tail / attack
+        // Strums keep ≥ 35 % of their attack energy there; chucks ≤ 10 %.
+        return min(1, max(0, (0.35 - ratio) / 0.25))
     }
 
     /// Beat phase (0..<4) where bars start: the one that catches the most chord changes.

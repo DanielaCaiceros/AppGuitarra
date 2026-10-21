@@ -73,7 +73,8 @@ nonisolated enum SongAnalyzer {
             }
         }
         chords = removeShortChords(chords, minimumLength: beat * 1.5, duration: duration)
-        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration)
+        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration,
+                               audio: (samples: audio, sampleRate: sampleRate))
         progress?(1)
         return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords, strum: strum)
     }
@@ -86,7 +87,8 @@ nonisolated enum SongAnalyzer {
         let audio = peak > 0 ? samples.map { $0 / peak } : samples
         let curve = onsetCurve(samples: audio, sampleRate: sampleRate)
         let tempo = tempoCurve(tempoAudio, fallback: curve).flatMap { estimateTempo(curve: $0) }
-        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration)
+        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration,
+                               audio: (samples: audio, sampleRate: sampleRate))
         return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords, strum: strum)
     }
 
@@ -98,11 +100,12 @@ nonisolated enum SongAnalyzer {
         return onsetCurve(samples: audio, sampleRate: tempoAudio.sampleRate) ?? fallback
     }
 
-    private static func strumGuess(curve: OnsetCurve?, tempo: (bpm: Double, offset: Double)?, chords: [SongChord], duration: Double) -> StrumGuess? {
+    private static func strumGuess(curve: OnsetCurve?, tempo: (bpm: Double, offset: Double)?, chords: [SongChord], duration: Double,
+                                   audio: (samples: [Float], sampleRate: Double)? = nil) -> StrumGuess? {
         guard let curve, let tempo else { return nil }
         return StrumDetector.detect(
             onsets: curve.values, hopSeconds: curve.hopSeconds, frameTime: curve.frameTime,
-            bpm: tempo.bpm, beatOffset: tempo.offset, chords: chords, duration: duration
+            bpm: tempo.bpm, beatOffset: tempo.offset, chords: chords, duration: duration, audio: audio
         )
     }
 
