@@ -14,9 +14,9 @@ final class ChordLibraryTests: XCTestCase {
         try ChordLibrary.loadChords()
     }
 
-    func testLoadsAllFifteenMVPChords() throws {
+    func testLoadsAllMVPChords() throws {
         let chords = try loadChords()
-        XCTAssertEqual(chords.count, 15)
+        XCTAssertEqual(chords.count, 30)
         XCTAssertEqual(Set(chords.map(\.id)).count, chords.count, "Chord ids must be unique")
     }
 
@@ -37,12 +37,37 @@ final class ChordLibraryTests: XCTestCase {
             "C": [0, 4, 7], "D": [2, 6, 9], "E": [4, 8, 11], "G": [7, 11, 2], "A": [9, 1, 4],
             "Am": [9, 0, 4], "Dm": [2, 5, 9], "Em": [4, 7, 11],
             "E7": [4, 8, 11, 2], "A7": [9, 1, 4, 7], "D7": [2, 6, 9, 0], "G7": [7, 11, 2, 5], "B7": [11, 3, 6, 9],
-            "F": [5, 9, 0], "Fmaj7": [5, 9, 0, 4],
+            "F": [5, 9, 0], "Fmaj7": [5, 9, 0, 4], "Bm": [11, 2, 6],
+            // Barre chords: every other major and minor triad.
+            "Bb": [10, 2, 5], "B": [11, 3, 6], "C#": [1, 5, 8], "Eb": [3, 7, 10], "F#": [6, 10, 1], "Ab": [8, 0, 3],
+            "Cm": [0, 3, 7], "C#m": [1, 4, 8], "Ebm": [3, 6, 10], "Fm": [5, 8, 0], "F#m": [6, 9, 1],
+            "Gm": [7, 10, 2], "Abm": [8, 11, 3], "Bbm": [10, 1, 5],
         ]
         let chords = try loadChords()
         XCTAssertEqual(Set(chords.map(\.id)), Set(expected.keys))
         for chord in chords {
             XCTAssertEqual(chord.pitchClasses, expected[chord.id], chord.id)
+        }
+    }
+
+    func testEveryMajorAndMinorTriadHasAShape() throws {
+        let ids = Set(try loadChords().map(\.id))
+        for root in 0..<12 {
+            for quality in [ChordSymbol.Quality.major, .minor] {
+                let name = ChordSymbol(root: root, quality: quality).name
+                XCTAssertTrue(ids.contains(name), "\(name) has no diagram")
+            }
+        }
+    }
+
+    func testBarreShapesListMatchesTheJSON() throws {
+        let chords = try loadChords()
+        XCTAssertEqual(Set(chords.filter(\.isFullBarre).map(\.id)), ChordLibrary.barreShapes)
+        for chord in chords where chord.isFullBarre {
+            let barre = try XCTUnwrap(chord.barre)
+            XCTAssertEqual(barre.fret, chord.baseFret, chord.id)
+            XCTAssertEqual(barre.fret, chord.frets.filter { $0 > 0 }.min(), "\(chord.id): the barre is the lowest fret")
+            XCTAssertLessThanOrEqual(chord.highestFret - chord.baseFret, 3, "\(chord.id) fits in 4 frets")
         }
     }
 

@@ -21,6 +21,16 @@ nonisolated struct SongAnalysis: Sendable {
     /// Time of the first beat.
     let beatOffset: Double
     let chords: [SongChord]
+    /// Strum pattern guessed from the hits (nil without a tempo).
+    var strum: StrumGuess? = nil
+}
+
+/// Spectral-flux onset curve: how much the sound "hits" at each hop.
+nonisolated struct OnsetCurve: Sendable {
+    let values: [Float]
+    let hopSeconds: Double
+    /// Time that frame 0 stands for (the attack sits half a window in).
+    let frameTime: Double
 }
 
 nonisolated enum SongAnalyzer {
@@ -38,7 +48,8 @@ nonisolated enum SongAnalyzer {
         let audio = peak > 0 ? samples.map { $0 / peak } : samples
         progress?(0.05)
 
-        let tempo = estimateTempo(samples: audio, sampleRate: sampleRate)
+        let curve = onsetCurve(samples: audio, sampleRate: sampleRate)
+        let tempo = curve.flatMap { estimateTempo(curve: $0) }
         progress?(0.25)
 
         let beat = tempo.map { 60 / $0.bpm } ?? 0.5
@@ -58,13 +69,37 @@ nonisolated enum SongAnalyzer {
             }
         }
         chords = removeShortChords(chords, minimumLength: beat * 1.5, duration: duration)
+        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration)
         progress?(1)
-        return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords)
+        return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords, strum: strum)
+    }
+
+    /// Only tempo and strum pattern, keeping chords the user may have corrected.
+    static func analyzeStrum(samples: [Float], sampleRate: Double, chords: [SongChord]) -> SongAnalysis {
+        let duration = Double(samples.count) / sampleRate
+        let peak = samples.reduce(Float(0)) { max($0, abs($1)) }
+        let audio = peak > 0 ? samples.map { $0 / peak } : samples
+        let curve = onsetCurve(samples: audio, sampleRate: sampleRate)
+        let tempo = curve.flatMap { estimateTempo(curve: $0) }
+        let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration)
+        return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords, strum: strum)
+    }
+
+    private static func strumGuess(curve: OnsetCurve?, tempo: (bpm: Double, offset: Double)?, chords: [SongChord], duration: Double) -> StrumGuess? {
+        guard let curve, let tempo else { return nil }
+        return StrumDetector.detect(
+            onsets: curve.values, hopSeconds: curve.hopSeconds, frameTime: curve.frameTime,
+            bpm: tempo.bpm, beatOffset: tempo.offset, chords: chords, duration: duration
+        )
     }
 
     // MARK: - Tempo
 
     static func estimateTempo(samples: [Float], sampleRate: Double, minBPM: Double = 60, maxBPM: Double = 180) -> (bpm: Double, offset: Double)? {
+        onsetCurve(samples: samples, sampleRate: sampleRate).flatMap { estimateTempo(curve: $0, minBPM: minBPM, maxBPM: maxBPM) }
+    }
+
+    static func onsetCurve(samples: [Float], sampleRate: Double) -> OnsetCurve? {
         let size = 1024
         let hop = 512
         guard samples.count > size * 8 else { return nil }
@@ -103,6 +138,13 @@ nonisolated enum SongAnalyzer {
                 onsets[centered] = max(0, flux[centered] - running / Float(min(i + 1, window)))
             }
         }
+        // Onset frames are stamped at their start; the attack sits half a window later.
+        return OnsetCurve(values: onsets, hopSeconds: hopSeconds, frameTime: Double(size / 2) / sampleRate)
+    }
+
+    static func estimateTempo(curve: OnsetCurve, minBPM: Double = 60, maxBPM: Double = 180) -> (bpm: Double, offset: Double)? {
+        let onsets = curve.values
+        let hopSeconds = curve.hopSeconds
 
         let minLag = max(1, Int((60 / maxBPM / hopSeconds).rounded(.down)))
         let maxLag = Int((60 / minBPM / hopSeconds).rounded(.up))
@@ -143,8 +185,7 @@ nonisolated enum SongAnalyzer {
                 bestPhase = phase
             }
         }
-        // Onset frames are stamped at their start; the attack sits half a window later.
-        let offset = Double(bestPhase) * hopSeconds + Double(size / 2) / sampleRate
+        let offset = Double(bestPhase) * hopSeconds + curve.frameTime
         return (bpm, offset)
     }
 

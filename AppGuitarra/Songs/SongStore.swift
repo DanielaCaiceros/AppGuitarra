@@ -89,6 +89,9 @@ final class SongStore {
     /// Chord ids that have a diagram in the app.
     let library: Set<String>
     let chords: [String: Chord]
+    /// Lesson strum patterns, in lesson-file order (to pick instead of the guess).
+    let patterns: [StrumPattern]
+    let patternsByID: [String: StrumPattern]
 
     @ObservationIgnored private let root: URL
 
@@ -97,6 +100,11 @@ final class SongStore {
         let loaded = (try? ChordLibrary.loadChords()) ?? []
         library = Set(loaded.map(\.id))
         chords = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0) })
+        let patternList: [StrumPattern] = Bundle.main.url(forResource: "patterns", withExtension: "json")
+            .flatMap { try? Data(contentsOf: $0) }
+            .flatMap { try? JSONDecoder().decode([StrumPattern].self, from: $0) } ?? []
+        patterns = patternList
+        patternsByID = Dictionary(patternList.map { ($0.id, $0) }) { first, _ in first }
         load()
     }
 
@@ -218,12 +226,33 @@ final class SongStore {
         case .success(let analysis):
             current.bpm = analysis.bpm
             current.chords = analysis.chords
+            current.strum = analysis.strum
+            current.barOffset = analysis.strum?.barOffset
             let best = CapoAdvisor.best(for: analysis.chords, duration: current.duration, library: library)
             current.suggestedCapo = (best?.capo ?? 0) > 0 ? best?.capo : nil
             current.status = analysis.chords.isEmpty ? .failed("No chords found. Add them by hand with Edit.") : .ready
         case .failure(let error):
             current.status = .failed(error.localizedDescription)
         }
+        save(current)
+    }
+
+    /// Guesses only the tempo and strum pattern, keeping the chords as they are
+    /// (for songs imported before pattern detection, or after editing chords).
+    func findStrum(_ song: Song) async {
+        let id = song.id
+        let url = audioURL(for: song)
+        let chords = song.chords
+        progress[id] = 0.1
+        let outcome: SongAnalysis? = await Task.detached(priority: .userInitiated) {
+            guard let audio = try? AudioDecoder.loadMono(url: url) else { return nil }
+            return SongAnalyzer.analyzeStrum(samples: audio.samples, sampleRate: audio.sampleRate, chords: chords)
+        }.value
+        progress[id] = nil
+        guard var current = self.song(id: id), let outcome else { return }
+        if let bpm = outcome.bpm { current.bpm = bpm }
+        current.strum = outcome.strum
+        current.barOffset = outcome.strum?.barOffset
         save(current)
     }
 }

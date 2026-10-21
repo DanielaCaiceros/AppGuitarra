@@ -18,6 +18,11 @@ struct FretboardView: View {
     var strummedStrings: Set<Int> = []
     /// Finger that was just placed; drawn slightly larger.
     var highlightedFinger: Int?
+    /// Notes held through a chord change: drawn with a green ring.
+    var anchoredPlacements: Set<FingerPlacement> = []
+    /// Identify dots by finger, so when the chord changes each dot slides
+    /// to its new spot instead of fading out and in.
+    var dotsFollowFingers = false
 
     private var firstFret: Int { chord.baseFret }
     private var fretCount: Int { max(5, chord.highestFret - chord.baseFret + 1) }
@@ -42,8 +47,16 @@ struct FretboardView: View {
                         .transition(.scale(scale: 0.2).combined(with: .opacity))
                 }
 
-                ForEach(chord.placements.filter { visibleFingers.contains($0.finger) }, id: \.self) { placement in
+                ForEach(dots) { dot in
+                    let placement = dot.placement
                     FingerDot(finger: placement.finger, radius: layout.dotRadius)
+                        .overlay {
+                            if anchoredPlacements.contains(placement) {
+                                Circle()
+                                    .stroke(Color.green, lineWidth: 5)
+                                    .padding(-6)
+                            }
+                        }
                         .scaleEffect(highlightedFinger == placement.finger ? 1.15 : 1)
                         .position(
                             x: layout.noteX(placement.fret - firstFret),
@@ -56,6 +69,23 @@ struct FretboardView: View {
         .aspectRatio(2.6, contentMode: .fit)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(chord.name) on the fretboard")
+    }
+
+    private struct PlacedDot: Identifiable {
+        let id: String
+        let placement: FingerPlacement
+    }
+
+    private var dots: [PlacedDot] {
+        var seen: [Int: Int] = [:]
+        return chord.placements.filter { visibleFingers.contains($0.finger) }.map { placement in
+            guard dotsFollowFingers else {
+                return PlacedDot(id: "\(placement.stringIndex)-\(placement.fret)-\(placement.finger)", placement: placement)
+            }
+            let count = seen[placement.finger, default: 0]
+            seen[placement.finger] = count + 1
+            return PlacedDot(id: "finger\(placement.finger)-\(count)", placement: placement)
+        }
     }
 
     // MARK: - Layout

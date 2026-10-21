@@ -48,6 +48,10 @@ nonisolated struct PracticeTimeline: Hashable, Sendable {
     nonisolated enum SoundID: Hashable, Sendable {
         case clickAccent, click
         case down(String), up(String)
+        /// Muted strum ("chuck") on a chord.
+        case mute(String)
+        /// A single plucked note (MIDI number).
+        case note(Int)
     }
 
     nonisolated struct TimedSound: Hashable, Sendable {
@@ -56,6 +60,13 @@ nonisolated struct PracticeTimeline: Hashable, Sendable {
         let sound: SoundID
         let gain: Float
         var isClick: Bool { sound == .click || sound == .clickAccent }
+        /// Strums cut off the strings that are still ringing; single notes let them ring.
+        var damps: Bool {
+            switch sound {
+            case .down, .up, .mute: true
+            case .clickAccent, .click, .note: false
+            }
+        }
     }
 
     var pattern: StrumPattern { config.pattern }
@@ -144,6 +155,13 @@ nonisolated struct PracticeTimeline: Hashable, Sendable {
                 switch stroke {
                 case .down: sounds.append(TimedSound(slot: absolute, sound: .down(chord.id), gain: accent))
                 case .up: sounds.append(TimedSound(slot: absolute, sound: .up(chord.id), gain: accent * 0.8))
+                case .mute: sounds.append(TimedSound(slot: absolute, sound: .mute(chord.id), gain: 0.9))
+                case .bass, .altBass, .string:
+                    // A string the chord mutes stays silent.
+                    guard let string = stroke.stringIndexes(on: chord).first,
+                          let midi = chord.midiNotes[string] else { continue }
+                    let gain: Float = min(1, (stroke.isBassNote ? 0.95 : 0.75) * (pattern.isAccented(slot) ? 1.15 : 1))
+                    sounds.append(TimedSound(slot: absolute, sound: .note(midi), gain: gain))
                 case .miss: break
                 }
             }

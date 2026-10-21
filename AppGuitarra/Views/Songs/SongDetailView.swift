@@ -4,7 +4,9 @@
 //
 //  Play along with an imported song: the current chord (as the shape you
 //  finger, with capo and easy chords applied), the next one, a chord strip,
-//  speed 50–100 % without changing pitch, and a loop for hard parts.
+//  speed 50–100 % without changing pitch, a loop for hard parts, and the
+//  strum pattern (guessed from the recording, or picked from the lessons)
+//  with the current stroke lit in time with the song.
 //
 
 import SwiftUI
@@ -46,6 +48,16 @@ struct SongDetailView: View {
                     let time = player.currentTime()
                     VStack(alignment: .leading, spacing: 24) {
                         SongStage(song: song, time: time, library: store.library, chords: store.chords)
+                        StrumPanel(
+                            song: song,
+                            time: time,
+                            isPlaying: player.isPlaying,
+                            patterns: store.patterns,
+                            patternsByID: store.patternsByID,
+                            isFinding: store.progress[song.id] != nil,
+                            onFind: { Task { await store.findStrum(song) } },
+                            edit: { change in update(song, change) }
+                        )
                         ChordStrip(song: song, time: time, library: store.library, loop: player.loop) { player.seek(to: $0) }
                         transport(song, time: time)
                     }
@@ -253,6 +265,189 @@ struct SongDetailView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
         }
+    }
+}
+
+// MARK: - Strum pattern
+
+/// The pattern as arrows with the current stroke lit, a moving pick, and
+/// controls to pick another pattern or move where the bar starts.
+private struct StrumPanel: View {
+    let song: Song
+    let time: Double
+    let isPlaying: Bool
+    let patterns: [StrumPattern]
+    let patternsByID: [String: StrumPattern]
+    let isFinding: Bool
+    let onFind: () -> Void
+    let edit: ((inout Song) -> Void) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            if let pattern = song.strumPattern(library: patternsByID), song.barOffset != nil, song.bpm != nil {
+                stage(pattern)
+                footnote(pattern)
+            } else if song.status == .ready || !song.chords.isEmpty {
+                findPrompt
+            }
+        }
+        .padding(24)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Color(uiColor: .secondarySystemBackground)))
+    }
+
+    private var header: some View {
+        HStack(spacing: 14) {
+            Label("Strum pattern", systemImage: "arrow.up.arrow.down")
+                .font(.title2.weight(.bold))
+            if let pattern = song.strumPattern(library: patternsByID) {
+                Text(pattern.name)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if song.strum != nil || song.patternID != nil {
+                patternMenu
+                beatShift
+            }
+        }
+    }
+
+    private var patternMenu: some View {
+        Menu {
+            if let detected = song.strum {
+                Button {
+                    edit { $0.patternID = nil }
+                } label: {
+                    Label("Heard in the song (\(spaced(detected.strokes)))",
+                          systemImage: song.patternID == nil ? "checkmark" : "waveform")
+                }
+                Divider()
+            }
+            ForEach(patterns) { pattern in
+                Button {
+                    edit { $0.patternID = pattern.id }
+                } label: {
+                    if song.patternID == pattern.id {
+                        Label(pattern.name, systemImage: "checkmark")
+                    } else {
+                        Text(pattern.name)
+                    }
+                }
+            }
+            Divider()
+            Button("Listen again for the pattern", systemImage: "waveform") { onFind() }
+                .disabled(isFinding)
+            if let bpm = song.bpm {
+                Button("Tempo is double (\(Int((bpm / 2).rounded())) bpm)", systemImage: "tortoise") {
+                    edit { $0.bpm = bpm / 2 }
+                }
+                Button("Tempo is half (\(Int((bpm * 2).rounded())) bpm)", systemImage: "hare") {
+                    edit { $0.bpm = bpm * 2 }
+                }
+            }
+        } label: {
+            Label("Change", systemImage: "slider.horizontal.3")
+                .font(.headline)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    /// Moves the "1" one beat earlier or later, for when the arrows feel shifted.
+    private var beatShift: some View {
+        HStack(spacing: 6) {
+            Button { shift(by: -1) } label: { Image(systemName: "chevron.left") }
+            Text("Move the 1")
+                .font(.subheadline.weight(.semibold))
+            Button { shift(by: 1) } label: { Image(systemName: "chevron.right") }
+        }
+        .buttonStyle(.bordered)
+        .disabled(song.barOffset == nil || song.bpm == nil)
+    }
+
+    private func shift(by beats: Int) {
+        edit { song in
+            guard let bpm = song.bpm, let offset = song.barOffset else { return }
+            song.barOffset = offset + Double(beats) * 60 / bpm
+        }
+    }
+
+    private func stage(_ pattern: StrumPattern) -> some View {
+        let index = song.chordIndex(at: time)
+        let hasChord = index.map { !song.chords[$0].isNoChord } ?? false
+        let position = isPlaying && hasChord ? song.strumPosition(at: time, pattern: pattern) : nil
+        let stroke = position.map { pattern.slots[$0.slot] } ?? .miss
+
+        return HStack(alignment: .center, spacing: 24) {
+            StrumPatternView(pattern: pattern, activeSlot: position?.slot)
+            if pattern.slotsPerBeat == 2 {
+                PickMotionView(
+                    slot: position?.slot,
+                    fraction: position?.fraction ?? 0,
+                    hits: position != nil && stroke.isPlayed
+                )
+                .frame(width: 70, height: 150)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func footnote(_ pattern: StrumPattern) -> some View {
+        if song.patternID == nil, let guess = song.strum {
+            VStack(alignment: .leading, spacing: 6) {
+                if let match = StrumDetector.closest(to: guess.strokes, in: patterns) {
+                    Label(match.distance == 0 ? "This is the \(match.pattern.name.lowercased()) from the lessons."
+                                              : "Close to the \(match.pattern.name.lowercased()) from the lessons. Try it from Change.",
+                          systemImage: "graduationcap")
+                }
+                Label(guess.confidence < 0.25
+                      ? "Not sure about this one: the drums or voice cover the guitar. Listen and pick a pattern from Change if it doesn't fit."
+                      : "Guessed from where the song's hits fall: down on the beat, up on the \"and\". If the arrows feel off by a beat, use Move the 1.",
+                      systemImage: guess.confidence < 0.25 ? "questionmark.circle" : "info.circle")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+        } else {
+            Label("Picked from the lessons. The arrows follow the song's tempo\(song.bpm.map { " (\(Int($0.rounded())) bpm)" } ?? "").",
+                  systemImage: "info.circle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var findPrompt: some View {
+        HStack(spacing: 16) {
+            Text("Listen to the song again to guess how it's strummed. Your chords stay as they are.")
+                .font(.title3)
+            Spacer()
+            if isFinding {
+                ProgressView()
+                Text("Listening…").foregroundStyle(.secondary)
+            } else {
+                Button("Find the strum pattern", systemImage: "waveform") { onFind() }
+                    .buttonStyle(.borderedProminent)
+            }
+            Menu("Pick one") {
+                ForEach(patterns) { pattern in
+                    Button(pattern.name) {
+                        edit { song in
+                            song.patternID = pattern.id
+                            // Without a guess, bars start on the first chord.
+                            if song.barOffset == nil {
+                                song.barOffset = song.chords.first(where: { !$0.isNoChord })?.start ?? 0
+                            }
+                        }
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(song.bpm == nil)
+        }
+    }
+
+    private func spaced(_ strokes: String) -> String {
+        strokes.map { $0 == "D" ? "↓" : $0 == "U" ? "↑" : "·" }.joined(separator: " ")
     }
 }
 

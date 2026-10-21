@@ -105,6 +105,12 @@ nonisolated struct Song: Codable, Hashable, Sendable, Identifiable {
     var easyChords: Bool
     var status: Status
     var createdAt: Date
+    /// Strum pattern guessed from the recording (nil = not analyzed yet).
+    var strum: StrumGuess?
+    /// Time of a bar start ("1"). Starts at the guess; the user can move it a beat.
+    var barOffset: Double?
+    /// Lesson pattern the user picked instead of the guess (nil = use the guess).
+    var patternID: String?
 
     init(id: UUID = UUID(), title: String, audioFileName: String, duration: Double) {
         self.id = id
@@ -118,6 +124,33 @@ nonisolated struct Song: Codable, Hashable, Sendable, Identifiable {
         easyChords = true
         status = .analyzing
         createdAt = Date()
+        strum = nil
+        barOffset = nil
+        patternID = nil
+    }
+
+    /// The guessed pattern as a `StrumPattern`.
+    var detectedPattern: StrumPattern? {
+        strum.map { StrumPattern(id: Self.detectedPatternID, name: "Heard in the song", strokes: $0.strokes, accents: $0.accents) }
+    }
+
+    static let detectedPatternID = "detected"
+
+    /// Pattern to show: the user's pick, or the guess.
+    func strumPattern(library: [String: StrumPattern]) -> StrumPattern? {
+        if let patternID, let picked = library[patternID] { return picked }
+        return detectedPattern
+    }
+
+    /// Slot of the pattern at a song time and how far through it (0..<1).
+    func strumPosition(at time: Double, pattern: StrumPattern) -> (slot: Int, fraction: Double)? {
+        guard let bpm, bpm > 0, let barOffset else { return nil }
+        let slotLength = 60 / bpm / Double(pattern.slotsPerBeat)
+        let raw = (time - barOffset) / slotLength
+        let whole = raw.rounded(.down)
+        let count = pattern.slotsPerBar
+        let slot = ((Int(whole) % count) + count) % count
+        return (slot, raw - whole)
     }
 
     /// Index of the chord sounding at a time (the last one that started before it).
@@ -193,12 +226,14 @@ nonisolated enum CapoAdvisor {
         return shape
     }
 
-    /// How easy a shape is: 1 for open library shapes, less for the partial-barre F
-    /// or shapes that need simplifying, 0 for shapes the app can't show.
+    /// How easy a shape is: 1 for open library shapes, less for the partial-barre F / Bm,
+    /// full barre chords or shapes that need simplifying, 0 for shapes the app can't show.
     static func ease(of shape: String, library: Set<String>) -> Double {
-        if shape == "F" { return 0.7 }
+        if shape == "F" || shape == "Bm" { return 0.7 }
+        if ChordLibrary.barreShapes.contains(shape), library.contains(shape) { return 0.4 }
         if library.contains(shape) { return 1 }
-        if library.contains(easierShape(shape, library: library)) { return 0.8 }
+        let easier = easierShape(shape, library: library)
+        if easier != shape, library.contains(easier) { return 0.8 * ease(of: easier, library: library) }
         return 0
     }
 

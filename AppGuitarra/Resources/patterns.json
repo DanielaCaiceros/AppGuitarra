@@ -2,5 +2,10 @@
   { "id": "quarter-downs", "name": "Downstrokes on the beat", "strokes": "D-D-D-D-", "accents": [0] },
   { "id": "eighths",       "name": "Down-up eighths",         "strokes": "DUDUDUDU", "accents": [0] },
   { "id": "folk",          "name": "Folk pattern",            "strokes": "D-DU-UDU", "accents": [0] },
-  { "id": "backbeat",      "name": "Accents on 2 and 4",      "strokes": "D-DUD-DU", "accents": [2, 6] }
+  { "id": "backbeat",      "name": "Accents on 2 and 4",      "strokes": "D-DUD-DU", "accents": [2, 6] },
+  { "id": "chuck",         "name": "Chucks on 2 and 4",       "strokes": "D-xUD-xU", "accents": [0] },
+  { "id": "arpeggio",      "name": "Arpeggio: bass, 3-2-1-2-3-2-1", "strokes": "B3212321", "accents": [0] },
+  { "id": "carter",        "name": "Alternating bass (boom-chick)", "strokes": "B-DUA-DU", "accents": [0, 4] },
+  { "id": "six-eight",     "name": "6/8 strum",               "strokes": "D-DUDU",   "accents": [0, 3], "beatsPerBar": 2, "slotsPerBeat": 3 },
+  { "id": "waltz",         "name": "3/4 waltz strum",         "strokes": "D-DUDU",   "accents": [0], "beatsPerBar": 3, "slotsPerBeat": 2 }
 ]

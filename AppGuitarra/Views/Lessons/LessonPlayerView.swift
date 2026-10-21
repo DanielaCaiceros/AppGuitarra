@@ -100,17 +100,21 @@ struct LessonPlayerView: View {
         switch step {
         case .show(let show):
             intro(title: show.title, text: show.text)
-            if let id = show.chord, let chord = catalog.chords[id] {
-                AnimatedChordView(chord: chord)
-            } else if let id = show.pattern, let pattern = catalog.patterns[id],
-                      let chord = catalog.chords[show.chord ?? lesson.chords.first ?? ""] {
+            if let id = show.pattern, let pattern = catalog.patterns[id],
+               let chord = catalog.chords[show.chord ?? lesson.chords.first ?? ""] {
                 PracticeStageView(
                     pattern: pattern,
                     segments: [PracticeSegment(chord: chord, bars: 1)],
                     targetBpm: show.bpm ?? 70,
                     mode: .preview,
-                    tempo: $tempo
+                    tempo: $tempo,
+                    onStart: { progress.recordPractice() }
                 )
+            } else if let fromID = show.chord, let toID = show.toChord,
+                      let from = catalog.chords[fromID], let to = catalog.chords[toID] {
+                ChordChangeView(from: from, to: to)
+            } else if let id = show.chord, let chord = catalog.chords[id] {
+                AnimatedChordView(chord: chord)
             }
 
         case .practice(let practice):
@@ -128,7 +132,8 @@ struct LessonPlayerView: View {
                     segments: segments(practice.progression),
                     targetBpm: practice.bpm,
                     mode: .practice,
-                    tempo: $tempo
+                    tempo: $tempo,
+                    onStart: { progress.recordPractice() }
                 )
             }
 

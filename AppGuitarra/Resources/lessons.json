@@ -8,9 +8,9 @@
       { "type": "show", "title": "Meet E minor", "chord": "Em",
         "text": "Two fingers, and all six strings ring. Watch where each finger goes, then copy the shape." },
       { "type": "show", "title": "Meet A minor", "chord": "Am",
-        "text": "Am looks like Em moved down one string, plus your index finger. Skip the thickest string." },
+        "text": "Am is the Em shape moved one string toward the floor, plus your index finger. Skip the thickest string." },
       { "type": "show", "title": "Strum on the beat", "pattern": "quarter-downs", "bpm": 70,
-        "text": "One downstroke on each click: 1, 2, 3, 4. Your hand still comes back up between beats, it just misses the strings." },
+        "text": "One downstroke on each click: 1, 2, 3, 4. Your hand still comes back up between beats; it just misses the strings." },
       { "type": "practice", "title": "Play along", "pattern": "quarter-downs", "bpm": 70,
         "progression": [ { "chord": "Em", "bars": 2 }, { "chord": "Am", "bars": 2 } ],
         "text": "Two bars of Em, two bars of Am. If a change is late, keep strumming anyway: the pulse matters more than a perfect chord." },
@@ -25,7 +25,7 @@
     "chords": ["Em", "Am"],
     "steps": [
       { "type": "show", "title": "Down on the number, up on the \"and\"", "pattern": "eighths", "bpm": 80,
-        "text": "Count \"1 and 2 and 3 and 4 and\". Down on the numbers, up on every \"and\". Upstrokes are lighter: mostly the thin strings." },
+        "text": "Count \"1 and 2 and 3 and 4 and\". Down on the numbers, up on every \"and\". Upstrokes are lighter and mostly catch the thin strings." },
       { "type": "practice", "title": "Play along", "pattern": "eighths", "bpm": 80,
         "progression": [ { "chord": "Em", "bars": 2 }, { "chord": "Am", "bars": 2 } ],
         "text": "Keep your wrist loose and the motion even, like shaking water off your hand." },
@@ -47,9 +47,131 @@
         "text": "Your hand never stops: down-up on every beat. On the \"and\" of 1 and on beat 3 it moves without touching the strings." },
       { "type": "practice", "title": "Play along", "pattern": "folk", "bpm": 70,
         "progression": [ { "chord": "G", "bars": 2 }, { "chord": "D", "bars": 2 } ],
-        "text": "Say it out loud: \"down, down-up, up-down-up\". Start slow; speed comes on its own." },
+        "text": "Say it out loud: \"down, down-up, up-down-up\". Start slow; the speed comes on its own." },
       { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 70,
         "goal": "8 bars of the folk pattern without stopping" }
+    ]
+  },
+  {
+    "id": "L04", "number": 4, "module": "Rhythm",
+    "title": "Accents and muted strums",
+    "summary": "Make the beat groove: hit 2 and 4 harder, then turn them into a percussive \"chuck\".",
+    "chords": ["G", "D", "C"],
+    "steps": [
+      { "type": "show", "title": "Meet C major", "chord": "C",
+        "text": "Three fingers in a diagonal line. Skip the thickest string: start your strum on the 5th string." },
+      { "type": "show", "title": "Accents on 2 and 4", "pattern": "backbeat", "bpm": 80, "chord": "G",
+        "text": "The same down-up motion, but beats 2 and 4 (marked >) are louder. That's where the snare drum lands in most pop songs." },
+      { "type": "show", "title": "The chuck", "pattern": "chuck", "bpm": 80, "chord": "G",
+        "text": "On beats 2 and 4, let the side of your strumming hand land on the strings as you strum down. The strings go dead and you get a short \"chk\" instead of a chord. Lift the palm right away so the next strum rings." },
+      { "type": "practice", "title": "Play along", "pattern": "chuck", "bpm": 80,
+        "progression": [ { "chord": "G", "bars": 2 }, { "chord": "C", "bars": 1 }, { "chord": "D", "bars": 1 } ],
+        "text": "Strum, chk, strum-strum, chk. If the chuck rings like a chord, press your palm down a bit more. If the next strum sounds dead, lift sooner." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 80,
+        "goal": "8 bars with the chuck on 2 and 4 at 80 bpm" }
+    ]
+  },
+  {
+    "id": "L05", "number": 5, "module": "Changes",
+    "title": "Anchor fingers and guide fingers",
+    "summary": "Change chords faster by moving fewer fingers: keep anchors down and land shapes as one.",
+    "chords": ["C", "Am", "G", "D"],
+    "steps": [
+      { "type": "show", "title": "C → Am: two anchors", "chord": "C", "toChord": "Am",
+        "text": "Fingers 1 and 2 don't move at all, so keep them pressed. Only your ring finger travels." },
+      { "type": "show", "title": "G → D: move the shape", "chord": "G", "toChord": "D",
+        "text": "No finger can stay here. Lift all three together, make the D shape in the air on the way, and land them at the same time." },
+      { "type": "practice", "title": "C ↔ Am", "pattern": "quarter-downs", "bpm": 60,
+        "progression": [ { "chord": "C", "bars": 1 }, { "chord": "Am", "bars": 1 } ],
+        "text": "One change every bar. Watch your anchors: they should never leave the strings." },
+      { "type": "practice", "title": "All four chords", "pattern": "quarter-downs", "bpm": 60,
+        "progression": [ { "chord": "G", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "Am", "bars": 1 } ],
+        "text": "G, D, C, Am, one bar each. Land each shape as a group, even if a string buzzes at first. Then open the Trainer tab and aim for 30 clean changes in 60 seconds." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 60,
+        "goal": "8 bars with a clean change every bar at 60 bpm" }
+    ]
+  },
+  {
+    "id": "L06", "number": 6, "module": "Changes",
+    "title": "Change on the last beat",
+    "summary": "Land every new chord right on beat 1 by leaving the old one a little early.",
+    "chords": ["G", "C", "D", "Em"],
+    "steps": [
+      { "type": "show", "title": "Leave early", "pattern": "folk", "bpm": 70, "chord": "G",
+        "text": "The \"Next\" sign turns orange on beat 4. That's your cue: on the last upstroke, lift your fingers and strum the open strings while they travel. Nobody hears it, and you land on beat 1 on time." },
+      { "type": "show", "title": "G → C", "chord": "G", "toChord": "C",
+        "text": "Every finger moves, so this is the hardest change in the lesson. Lead with your ring finger and let the others follow." },
+      { "type": "show", "title": "D → Em", "chord": "D", "toChord": "Em",
+        "text": "Em only needs two fingers, so it's an easy landing. Aim for the 5th and 4th strings and strum all six." },
+      { "type": "practice", "title": "Play along", "pattern": "folk", "bpm": 70,
+        "progression": [ { "chord": "G", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "Em", "bars": 1 } ],
+        "text": "One chord per bar. Your strumming hand is the clock: it keeps moving no matter what the other hand is doing." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 70,
+        "goal": "Every change on time for 8 bars at 70 bpm" }
+    ]
+  },
+  {
+    "id": "L07", "number": 7, "module": "Changes",
+    "title": "Seventh chords and the blues",
+    "summary": "Learn E7, A7, D7 and B7, then play a full 12-bar blues in E.",
+    "chords": ["E7", "A7", "D7", "B7"],
+    "steps": [
+      { "type": "show", "title": "Meet E7", "chord": "E7",
+        "text": "E7 is E major with one finger lifted. Two fingers, all six strings ring, and the open 4th string adds the bluesy 7th." },
+      { "type": "show", "title": "Meet A7", "chord": "A7",
+        "text": "Two fingers on the 2nd fret with the 3rd string left open between them. Skip the thickest string." },
+      { "type": "show", "title": "Meet D7", "chord": "D7",
+        "text": "An upside-down triangle on the thin strings. Start your strum on the 4th string." },
+      { "type": "show", "title": "Meet B7", "chord": "B7",
+        "text": "Your first four-finger chord. Build it from the middle finger out, and skip the 6th string." },
+      { "type": "show", "title": "B7 → E7: a pivot", "chord": "B7", "toChord": "E7",
+        "text": "Finger 2 sits on the same spot in both chords. Keep it down and use it as a pivot." },
+      { "type": "practice", "title": "12-bar blues in E", "pattern": "eighths", "bpm": 70,
+        "progression": [ { "chord": "E7", "bars": 4 }, { "chord": "A7", "bars": 2 }, { "chord": "E7", "bars": 2 },
+                         { "chord": "B7", "bars": 1 }, { "chord": "A7", "bars": 1 }, { "chord": "E7", "bars": 1 }, { "chord": "B7", "bars": 1 } ],
+        "text": "This progression is behind thousands of songs: 4 bars of E7, 2 of A7, 2 of E7, then one bar each of B7, A7, E7 and B7, which turns you back to the start." },
+      { "type": "check", "title": "Check yourself", "bars": 12, "bpm": 70,
+        "goal": "A full 12-bar blues in E at 70 bpm" }
+    ]
+  },
+  {
+    "id": "L08", "number": 8, "module": "Changes",
+    "title": "Closing song: the I–V–vi–IV progression",
+    "summary": "Play a whole song with the four most common chords in pop: G, D, Em and C.",
+    "chords": ["G", "D", "Em", "C"],
+    "steps": [
+      { "type": "show", "title": "The four chords of pop", "pattern": "folk", "bpm": 90, "chord": "G",
+        "text": "G, D, Em, C, in that order, is the I–V–vi–IV progression. You'll hear it in pop songs from every decade, and you already know all four chords." },
+      { "type": "show", "title": "Em → C", "chord": "Em", "toChord": "C",
+        "text": "The change from Em to C is the one that usually trips people up here. Watch it a few times before you play." },
+      { "type": "practice", "title": "The verse", "pattern": "folk", "bpm": 90,
+        "progression": [ { "chord": "G", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "Em", "bars": 1 }, { "chord": "C", "bars": 1 } ],
+        "text": "One bar each. Start at Medium; when it feels easy, switch to Normal." },
+      { "type": "practice", "title": "The whole song", "pattern": "folk", "bpm": 90,
+        "progression": [ { "chord": "G", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "Em", "bars": 1 }, { "chord": "C", "bars": 1 },
+                         { "chord": "G", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "Em", "bars": 1 }, { "chord": "C", "bars": 1 },
+                         { "chord": "C", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "G", "bars": 1 }, { "chord": "Em", "bars": 1 },
+                         { "chord": "C", "bars": 1 }, { "chord": "D", "bars": 1 }, { "chord": "G", "bars": 2 } ],
+        "text": "The verse twice, then a chorus that starts on C and lands on G. Follow the big chord name and the \"Next\" sign." },
+      { "type": "check", "title": "Check yourself", "bars": 16, "bpm": 90,
+        "goal": "The whole song, 16 bars, at 90 bpm" }
+    ]
+  },
+  {
+    "id": "L09", "number": 9, "module": "Technique",
+    "title": "Arpeggios with a pick",
+    "summary": "Hold the chord and pick the strings one at a time, letting every note ring.",
+    "chords": ["C", "Am", "G"],
+    "steps": [
+      { "type": "show", "title": "One string at a time", "pattern": "arpeggio", "bpm": 60, "chord": "C",
+        "text": "Pick the bass note on beat 1, then strings 3, 2, 1, 2, 3, 2, 1. The numbers are string numbers: 1 is the thinnest. On C, the bass note is the 5th string." },
+      { "type": "show", "title": "The bass note moves", "pattern": "arpeggio", "bpm": 60, "chord": "G",
+        "text": "On G the bass note is the 6th string. The rest of the pattern stays the same, so only the first note needs aiming." },
+      { "type": "practice", "title": "Play along", "pattern": "arpeggio", "bpm": 60,
+        "progression": [ { "chord": "C", "bars": 1 }, { "chord": "Am", "bars": 1 }, { "chord": "G", "bars": 2 } ],
+        "text": "Let every note ring into the next. If a note sounds dead, a finger is touching that string: arch your fingers more and press with the tips." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 60,
+        "goal": "8 bars of clean arpeggios, no dead strings" }
     ]
   },
   {
@@ -62,11 +184,53 @@
         "text": "Fmaj7 sounds close to F and needs no barre. Use it in songs while the real F gets stronger." },
       { "type": "show", "title": "F with a small barre", "chord": "F",
         "text": "Lay your index finger flat across the two thinnest strings at fret 1. Roll it slightly onto its bony side so both strings ring." },
+      { "type": "show", "title": "C → F", "chord": "C", "toChord": "F",
+        "text": "Your index finger stays on the 2nd string and flattens over the 1st. Middle and ring fingers each move one string toward the thin strings." },
       { "type": "practice", "title": "C → F → C → G", "pattern": "quarter-downs", "bpm": 60,
         "progression": [ { "chord": "C", "bars": 1 }, { "chord": "F", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "G", "bars": 1 } ],
-        "text": "From C, your ring and middle fingers move up one string each, and your index flattens. Strum only the 4 thin strings on F." },
+        "text": "Strum only the 4 thin strings on F. If a string buzzes, press closer to the fret wire, not harder." },
       { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 60,
         "goal": "F rings on all 4 strings in time, twice through" }
+    ]
+  },
+  {
+    "id": "L11", "number": 11, "module": "Technique",
+    "title": "Alternating bass (basic Carter style)",
+    "summary": "Pick a bass note, strum, pick another bass note, strum: the classic \"boom-chick\".",
+    "chords": ["C", "G"],
+    "steps": [
+      { "type": "show", "title": "Boom-chick on C", "pattern": "carter", "bpm": 60, "chord": "C",
+        "text": "Bass note on beat 1, a light strum on 2, the other bass note on 3, strum on 4. On C the bass goes from the 5th string to the 4th." },
+      { "type": "show", "title": "Boom-chick on G", "pattern": "carter", "bpm": 60, "chord": "G",
+        "text": "On G the bass jumps from the 6th string to the 4th. Your pick has to find the string without looking, so go slowly at first." },
+      { "type": "practice", "title": "Play along", "pattern": "carter", "bpm": 70,
+        "progression": [ { "chord": "C", "bars": 2 }, { "chord": "G", "bars": 2 } ],
+        "text": "Keep the bass notes strong and the strums light. That contrast is what makes the style." },
+      { "type": "check", "title": "Check yourself", "bars": 8, "bpm": 70,
+        "goal": "Bass and strum together for 8 bars at 70 bpm" }
+    ]
+  },
+  {
+    "id": "L12", "number": 12, "module": "Technique",
+    "title": "Closing song: vi–IV–I–V with arpeggios",
+    "summary": "Put it all together: Am, F, C and G as a fingerpicked-style song with a pick.",
+    "chords": ["Am", "F", "C", "G"],
+    "steps": [
+      { "type": "show", "title": "Am → F", "chord": "Am", "toChord": "F",
+        "text": "Your index finger stays on the 2nd string and flattens over the 1st. Middle and ring fingers cross over to their new strings." },
+      { "type": "show", "title": "The arpeggio again", "pattern": "arpeggio", "bpm": 70, "chord": "F",
+        "text": "Same pattern as Lesson 9. On F the bass note is the 4th string, because the two thickest strings stay silent." },
+      { "type": "practice", "title": "The verse", "pattern": "arpeggio", "bpm": 70,
+        "progression": [ { "chord": "Am", "bars": 1 }, { "chord": "F", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "G", "bars": 1 } ],
+        "text": "If F isn't ringing yet, play Fmaj7 instead, but keep the arpeggio going: never stop the right hand." },
+      { "type": "practice", "title": "The whole song", "pattern": "arpeggio", "bpm": 70,
+        "progression": [ { "chord": "Am", "bars": 1 }, { "chord": "F", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "G", "bars": 1 },
+                         { "chord": "Am", "bars": 1 }, { "chord": "F", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "G", "bars": 1 },
+                         { "chord": "F", "bars": 1 }, { "chord": "G", "bars": 1 }, { "chord": "C", "bars": 1 }, { "chord": "Am", "bars": 1 },
+                         { "chord": "F", "bars": 1 }, { "chord": "G", "bars": 1 }, { "chord": "C", "bars": 2 } ],
+        "text": "The verse twice, then a chorus that turns it around: F, G, C, Am. End on a long C and let it ring." },
+      { "type": "check", "title": "Check yourself", "bars": 16, "bpm": 70,
+        "goal": "The whole song with arpeggios, 16 bars at 70 bpm" }
     ]
   }
 ]

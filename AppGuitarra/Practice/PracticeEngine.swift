@@ -119,15 +119,14 @@ final class PracticeEngine {
 
     // MARK: - Sounds
 
-    /// Clicks plus a down and an up strum for every chord in the progression.
+    /// Clicks plus every strum, chuck and single note the progression plays.
     private func soundBank(for config: PracticeConfig) async -> SoundBank {
         var ids: [PracticeTimeline.SoundID] = [.clickAccent, .click]
-        var chords: [Chord] = []
-        for segment in config.segments where !chords.contains(segment.chord) {
-            chords.append(segment.chord)
-            ids.append(.down(segment.chord.id))
-            ids.append(.up(segment.chord.id))
+        for timed in PracticeTimeline(config: config).cycleSounds where !timed.isClick && !ids.contains(timed.sound) {
+            ids.append(timed.sound)
         }
+        var chords: [String: Chord] = [:]
+        for segment in config.segments { chords[segment.chord.id] = segment.chord }
 
         let rate = sampleRate
         var samples: [[Float]] = []
@@ -143,11 +142,18 @@ final class PracticeEngine {
                 rendered = Self.renderClick(frequency: 1_760, sampleRate: rate)
             case .click:
                 rendered = Self.renderClick(frequency: 1_175, sampleRate: rate)
-            case .down(let chordID), .up(let chordID):
-                guard let chord = chords.first(where: { $0.id == chordID }) else { rendered = []; break }
-                let isUp: Bool = if case .up = id { true } else { false }
+            case .down(let chordID), .up(let chordID), .mute(let chordID):
+                guard let chord = chords[chordID] else { rendered = []; break }
                 rendered = await Task.detached(priority: .userInitiated) { () -> [Float] in
-                    PracticeEngine.renderStrum(chord, up: isUp, sampleRate: rate)
+                    switch id {
+                    case .up: PracticeEngine.renderStrum(chord, up: true, sampleRate: rate)
+                    case .mute: PracticeEngine.renderMute(chord, sampleRate: rate)
+                    default: PracticeEngine.renderStrum(chord, up: false, sampleRate: rate)
+                    }
+                }.value
+            case .note(let midi):
+                rendered = await Task.detached(priority: .userInitiated) { () -> [Float] in
+                    ChordSynth.renderStrum(midiNotes: [midi], stringDelay: 0, sampleRate: rate, duration: 1.6)
                 }.value
             }
             soundCache[key] = rendered
@@ -161,6 +167,22 @@ final class PracticeEngine {
         // Upstrokes mostly catch the thin strings, from high to low.
         let ordered: [Int?] = up ? notes.reversed().prefix(4).map { $0 } : notes.map { $0 }
         return ChordSynth.renderStrum(midiNotes: ordered, stringDelay: 0.012, sampleRate: sampleRate, duration: 1.6)
+    }
+
+    /// A "chuck": the strings are hit but the palm stops them at once,
+    /// so you hear a short, dull click with only a hint of the chord.
+    nonisolated static func renderMute(_ chord: Chord, sampleRate: Double) -> [Float] {
+        let strum = ChordSynth.renderStrum(midiNotes: chord.midiNotes, stringDelay: 0.004, sampleRate: sampleRate, duration: 0.12)
+        var generator = SystemRandomNumberGenerator()
+        var low: Float = 0
+        return strum.enumerated().map { n, sample in
+            let t = Double(n) / sampleRate
+            // Low-passed noise burst for the thump of the palm.
+            low += 0.15 * (Float.random(in: -1...1, using: &generator) - low)
+            let body = sample * Float(exp(-t * 45)) * 0.6
+            let thump = low * Float(exp(-t * 80)) * 1.6
+            return body + thump
+        }
     }
 
     /// Short "tock": a sine burst with a fast exponential decay.
@@ -209,6 +231,8 @@ nonisolated struct RenderProgram: Sendable {
         let sound: Int
         let gain: Float
         let isClick: Bool
+        /// Cuts off ringing strings (strums do, single notes don't).
+        let damps: Bool
     }
 
     /// All sounds back to back, with (start, length) per sound.
@@ -234,7 +258,7 @@ nonisolated struct RenderProgram: Sendable {
             sounds.compactMap { timed in
                 guard let index = bank.ids.firstIndex(of: timed.sound) else { return nil }
                 return Event(frame: timeline.frame(forSlot: timed.slot, sampleRate: sampleRate),
-                             sound: index, gain: timed.gain, isClick: timed.isClick)
+                             sound: index, gain: timed.gain, isClick: timed.isClick, damps: timed.damps)
             }
             .sorted { $0.frame < $1.frame }
         }
@@ -260,7 +284,7 @@ nonisolated final class Renderer: @unchecked Sendable {
     private static let fadeLength = 384
     private let program: RenderProgram
     private let shared: RenderShared
-    private var voices = ContiguousArray(repeating: Voice(), count: 10)
+    private var voices = ContiguousArray(repeating: Voice(), count: 16)
     private var frame = 0
     private var countInCursor = 0
     private var cycleCursor = 0
@@ -319,8 +343,8 @@ nonisolated final class Renderer: @unchecked Sendable {
 
     private func start(_ event: RenderProgram.Event) {
         let isStrum = !event.isClick
-        if isStrum {
-            // A new strum damps the previous one, like on a real guitar.
+        if event.damps {
+            // A new strum damps whatever still rings, like on a real guitar.
             for index in voices.indices where voices[index].isStrum && voices[index].sound >= 0 && voices[index].fade < 0 {
                 voices[index].fade = Self.fadeLength
             }

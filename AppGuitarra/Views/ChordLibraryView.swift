@@ -25,15 +25,10 @@ struct ChordLibraryView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 32)
                             .padding(.top, 8)
-                        LazyVGrid(columns: columns, spacing: 28) {
-                            ForEach(chords) { chord in
-                                NavigationLink(value: chord) {
-                                    ChordCard(chord: chord)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(32)
+                        section("Open chords", chords.filter { !$0.isFullBarre })
+                        section("Barre chords",
+                                note: "One finger presses every string. Harder: for songs that use them, try a capo first.",
+                                chords.filter(\.isFullBarre))
                     }
                 }
             }
@@ -43,6 +38,32 @@ struct ChordLibraryView: View {
             }
         }
         .onAppear(perform: load)
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, note: String? = nil, _ items: [Chord]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                if let note {
+                    Text(note)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                LazyVGrid(columns: columns, spacing: 28) {
+                    ForEach(items) { chord in
+                        NavigationLink(value: chord) {
+                            ChordCard(chord: chord)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 16)
+        }
     }
 
     private func load() {

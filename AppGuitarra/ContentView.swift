@@ -10,9 +10,13 @@ import SwiftUI
 struct ContentView: View {
     @State private var progress = LessonProgress()
     @State private var songs = SongStore()
+    @State private var path = PathStore()
 
     var body: some View {
         TabView {
+            Tab("Path", systemImage: "map") {
+                PathView()
+            }
             Tab("Lessons", systemImage: "graduationcap") {
                 LessonsView()
             }
@@ -34,6 +38,7 @@ struct ContentView: View {
         }
         .environment(progress)
         .environment(songs)
+        .environment(path)
     }
 }
 

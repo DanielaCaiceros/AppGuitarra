@@ -4,7 +4,8 @@
 //
 //  A lesson is plain JSON (Resources/lessons.json): adding one needs no UI code.
 //  Each lesson is a list of steps of three kinds:
-//    show     – watch a chord being placed, or a strum pattern being played
+//    show     – watch a chord being placed, a change between two chords,
+//               or a strum pattern being played
 //    practice – play along with the metronome (loops until you stop)
 //    check    – play a fixed number of bars, then say whether you made it
 //
@@ -22,7 +23,9 @@ nonisolated struct ShowStep: Codable, Hashable, Sendable {
     let text: String
     /// Show this chord being placed (AnimatedChordView)...
     let chord: String?
-    /// ...or this strum pattern being played on a single chord.
+    /// ...or the change from `chord` to this one: which fingers stay, slide or move...
+    let toChord: String?
+    /// ...or this strum pattern being played on `chord` (or the lesson's first chord).
     let pattern: String?
     let bpm: Int?
 }
@@ -199,7 +202,7 @@ nonisolated struct LessonCatalog: Sendable {
     func validationErrors() -> [String] {
         var errors: [String] = []
         for pattern in patterns.values where !pattern.isValid {
-            errors.append("Pattern \(pattern.id): strokes must have \(pattern.slotsPerBar) slots of D, U or -")
+            errors.append("Pattern \(pattern.id): strokes must have \(pattern.slotsPerBar) slots of D, U, -, x, B, A or 1-6")
         }
         func checkChord(_ id: String, _ where_: String) {
             if chords[id] == nil { errors.append("\(where_): unknown chord \(id)") }
@@ -226,6 +229,11 @@ nonisolated struct LessonCatalog: Sendable {
                     if show.chord == nil && show.pattern == nil { errors.append("\(place): show needs a chord or a pattern") }
                     if let chord = show.chord { checkChord(chord, place) }
                     if let pattern = show.pattern { checkPattern(pattern, place) }
+                    if let toChord = show.toChord {
+                        checkChord(toChord, place)
+                        if show.chord == nil { errors.append("\(place): toChord needs a chord to start from") }
+                        if show.pattern != nil { errors.append("\(place): use either toChord or pattern") }
+                    }
                 case .practice(let practice):
                     checkPattern(practice.pattern, place)
                     checkProgression(practice.progression, place)

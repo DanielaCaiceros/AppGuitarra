@@ -69,11 +69,28 @@ nonisolated struct Chord: Codable, Identifiable, Hashable, Sendable {
         Array(Set(placements.map(\.finger))).sorted()
     }
 
+    /// One finger across 5 or 6 strings (not the 2-string partial barre of F).
+    var isFullBarre: Bool {
+        barre.map { abs($0.fromString - $0.toString) >= 4 } ?? false
+    }
+
     /// Highest fret pressed (0 if the chord is all open strings).
     var highestFret: Int { frets.max() ?? 0 }
 
     /// Strings that are strummed (not muted).
     var playedStringIndexes: [Int] { frets.indices.filter { !isMuted($0) } }
+
+    /// Lowest string the chord uses: where the bass note is picked.
+    var bassStringIndex: Int? { playedStringIndexes.first }
+
+    /// Second bass note for boom-chick patterns: the 4th string when the root is
+    /// on the 6th (G → D string), otherwise the next string up (C: 5th → 4th).
+    var altBassStringIndex: Int? {
+        guard let bass = bassStringIndex else { return nil }
+        let preferred = bass == 0 ? 2 : bass + 1
+        if playedStringIndexes.contains(preferred) { return preferred }
+        return playedStringIndexes.first { $0 > bass }
+    }
 
     /// MIDI note per string, nil when the string is muted.
     var midiNotes: [Int?] {

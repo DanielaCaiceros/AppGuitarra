@@ -205,6 +205,16 @@ final class SongTests: XCTestCase {
         XCTAssertEqual(best.coverage, 1, accuracy: 0.001)
     }
 
+    func testBarreChordsHaveDiagramsButCapoIsStillPreferred() throws {
+        let library = Set(try chords().keys)
+        XCTAssertEqual(CapoAdvisor.ease(of: "F#m", library: library), 0.4, accuracy: 1e-9)
+        XCTAssertEqual(CapoAdvisor.ease(of: "Bb7", library: library), 0.32, accuracy: 1e-9, "7th without shape → barre triad")
+        // Bb F Gm Eb: with capo 3 it's G D Em C.
+        let song = [SongChord(start: 0, name: "Bb"), SongChord(start: 4, name: "F"),
+                    SongChord(start: 8, name: "Gm"), SongChord(start: 12, name: "Eb")]
+        XCTAssertEqual(CapoAdvisor.best(for: song, duration: 16, library: library)?.capo, 3)
+    }
+
     func testNoCapoWhenSongIsAlreadyEasy() throws {
         let library = Set(try chords().keys)
         let song = [SongChord(start: 0, name: "G"), SongChord(start: 4, name: "C"), SongChord(start: 8, name: "D")]

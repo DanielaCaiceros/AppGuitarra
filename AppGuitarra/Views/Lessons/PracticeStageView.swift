@@ -30,6 +30,8 @@ struct PracticeStageView: View {
     @Binding var tempo: DemoSpeed
     /// Called when a check ends. The result is nil when the microphone was not used.
     var onFinish: (CheckResult?) -> Void = { _ in }
+    /// Called when the user presses Start (used for the practice streak).
+    var onStart: () -> Void = {}
 
     @State private var engine = PracticeEngine()
     @State private var listener = ChordListener()
@@ -107,7 +109,7 @@ struct PracticeStageView: View {
 
                 FretboardView(
                     chord: chord,
-                    strummedStrings: flash ? Set(chord.playedStringIndexes) : []
+                    strummedStrings: flash ? Set(stroke.stringIndexes(on: chord)) : []
                 )
                 .overlay {
                     if let position, position.isCountIn {
@@ -275,6 +277,7 @@ struct PracticeStageView: View {
             if engine.isRunning {
                 stopAll()
             } else {
+                onStart()
                 Task { await start() }
             }
         } label: {

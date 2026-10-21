@@ -17,6 +17,14 @@ nonisolated enum ChordLibrary {
         }
     }
 
+    /// Full-barre shapes (one finger across 5 or 6 strings). They cover every
+    /// major and minor chord the song analysis can find, but are hard for a
+    /// beginner, so the capo advice treats them as a last resort.
+    static let barreShapes: Set<String> = [
+        "Bb", "B", "C#", "Eb", "F#", "Ab",
+        "Cm", "C#m", "Ebm", "Fm", "F#m", "Gm", "Abm", "Bbm",
+    ]
+
     static func loadChords(from bundle: Bundle = .main) throws -> [Chord] {
         guard let url = bundle.url(forResource: "chords", withExtension: "json") else {
             throw LoadError.missingResource("chords.json")
