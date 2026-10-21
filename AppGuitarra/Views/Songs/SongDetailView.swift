@@ -6,7 +6,8 @@
 //  finger, with capo and easy chords applied), the next one, a chord strip,
 //  speed 50–100 % without changing pitch, a loop for hard parts, and the
 //  strum pattern (guessed from the recording, or picked from the lessons)
-//  with the current stroke lit in time with the song.
+//  with the current stroke lit in time with the song. Separated songs get a
+//  mixer to bring the guitar up or take it out.
 //
 
 import SwiftUI
@@ -29,7 +30,8 @@ struct SongDetailView: View {
                 .sheet(isPresented: $showsEditor) {
                     ChordEditorView(song: song, currentTime: player.currentTime()) { player.seek(to: $0) }
                 }
-                .onAppear { player.load(url: store.audioURL(for: song)) }
+                .onAppear { loadPlayer(song) }
+                .onChange(of: song.stems != nil) { _, _ in loadPlayer(song) }
                 .onDisappear { player.stop() }
                 .onChange(of: speed) { _, value in player.rate = value.rate }
         } else {
@@ -37,10 +39,35 @@ struct SongDetailView: View {
         }
     }
 
+    /// The separated tracks when there are, else the original file.
+    private func loadPlayer(_ song: Song) {
+        if let mix = song.stems, store.hasStems(song) {
+            let urls = Dictionary(uniqueKeysWithValues: Stem.allCases.map { ($0, store.stemURL($0, for: song)) })
+            player.load(stems: urls, mix: mix)
+        } else {
+            player.load(url: store.audioURL(for: song))
+        }
+    }
+
     private func content(_ song: Song) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 statusBanner(song)
+                TracksPanel(
+                    song: song,
+                    hasStems: store.hasStems(song) && !player.stems.isEmpty,
+                    progress: store.separation[song.id],
+                    error: store.separationErrors[song.id],
+                    isAnalyzing: store.progress[song.id] != nil,
+                    onSeparate: { store.separate(song) },
+                    onCancel: { store.cancelSeparation(song) },
+                    onPreview: { player.setMix($0) },
+                    onCommit: { mix in
+                        player.setMix(mix)
+                        update(song) { $0.stems = mix }
+                    },
+                    onFindChords: { Task { await store.analyze(song) } }
+                )
                 if song.status == .ready || !song.chords.isEmpty {
                     capoSettings(song)
                 }
@@ -261,8 +288,172 @@ struct SongDetailView: View {
             Menu {
                 Button("Find chords again", systemImage: "waveform") { Task { await store.analyze(song) } }
                     .disabled(song.status == .analyzing)
+                if song.stems == nil {
+                    Button("Split into tracks", systemImage: "slider.vertical.3") { store.separate(song) }
+                        .disabled(!StemSeparator.isAvailable || store.separation[song.id] != nil)
+                } else {
+                    Button("Delete separated tracks", systemImage: "trash", role: .destructive) {
+                        player.pause()
+                        store.removeStems(song)
+                    }
+                }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
+            }
+        }
+    }
+}
+
+// MARK: - Separated tracks
+
+/// Split the song into drums, bass, guitar & others and vocals, then set how
+/// loud each one plays.
+private struct TracksPanel: View {
+    let song: Song
+    let hasStems: Bool
+    /// 0...1 while separating.
+    let progress: Double?
+    let error: String?
+    let isAnalyzing: Bool
+    let onSeparate: () -> Void
+    let onCancel: () -> Void
+    /// While a slider moves: only the player changes.
+    let onPreview: (StemMix) -> Void
+    /// When it's let go, or a preset is picked: saved with the song.
+    let onCommit: (StemMix) -> Void
+    let onFindChords: () -> Void
+
+    @State private var draft: StemMix?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let progress {
+                separating(progress)
+            } else if hasStems, let mix = song.stems {
+                mixer(draft ?? mix)
+            } else {
+                offer
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color(uiColor: .secondarySystemBackground)))
+    }
+
+    private var offer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "slider.vertical.3")
+                    .font(.largeTitle)
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Hear the guitar better")
+                        .font(.title3.weight(.semibold))
+                    Text("Splits the song into vocals, drums, bass and guitar, right on your iPad. Then you can turn the guitar up, play it alone, or take it out and play that part yourself.")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Split into tracks", systemImage: "wand.and.stars", action: onSeparate)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!StemSeparator.isAvailable)
+            }
+            if !StemSeparator.isAvailable {
+                Label("The separation model isn't in this build (HTDemucs.mlpackage, see tools/demucs).", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func separating(_ progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Splitting the song into tracks…", systemImage: "wand.and.stars")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Text("\(Int((progress * 100).rounded())) %")
+                    .font(.headline.monospacedDigit())
+                Button("Cancel", role: .cancel, action: onCancel)
+                    .buttonStyle(.bordered)
+            }
+            ProgressView(value: progress)
+            Text("Keep the app open. It takes about as long as the song, often less.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func mixer(_ mix: StemMix) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Tracks", systemImage: "slider.vertical.3")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Picker("Mix", selection: Binding(
+                    get: { mix.preset },
+                    set: { preset in
+                        guard let preset else { return }
+                        draft = nil
+                        onCommit(preset.mix)
+                    }
+                )) {
+                    ForEach(StemMix.Preset.allCases) { preset in
+                        Text(preset.title).tag(Optional(preset))
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 520)
+            }
+            Text(mix.preset?.explanation ?? "Your own mix.")
+                .foregroundStyle(.secondary)
+
+            ForEach(Stem.allCases) { stem in
+                HStack(spacing: 14) {
+                    Label(stem.title, systemImage: stem.systemImage)
+                        .font(.headline)
+                        .frame(width: 190, alignment: .leading)
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                    Slider(
+                        value: Binding(
+                            get: { mix.volume(stem) },
+                            set: { value in
+                                var changed = draft ?? mix
+                                changed.setVolume(value, for: stem)
+                                draft = changed
+                                onPreview(changed)
+                            }
+                        ),
+                        in: 0...1,
+                        onEditingChanged: { editing in
+                            if !editing, let draft {
+                                onCommit(draft)
+                                self.draft = nil
+                            }
+                        }
+                    )
+                    Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
+                    Text("\(Int((mix.volume(stem) * 100).rounded())) %")
+                        .font(.subheadline.monospacedDigit())
+                        .frame(width: 52, alignment: .trailing)
+                }
+            }
+
+            if song.chordsFromStems != true {
+                HStack(spacing: 12) {
+                    Label("The chords were found from the full song. From the guitar and bass alone they're usually more accurate.", systemImage: "lightbulb")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Find chords again", systemImage: "waveform", action: onFindChords)
+                        .buttonStyle(.bordered)
+                        .disabled(isAnalyzing)
+                }
+                Text("This replaces the chords, including any you fixed by hand.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }

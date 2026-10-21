@@ -29,3 +29,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Demucs (see tools/demucs/README.md): weights and the converted model are too big for git
+*.th
+AppGuitarra/Resources/HTDemucs.mlpackage/
+.model-transfer/

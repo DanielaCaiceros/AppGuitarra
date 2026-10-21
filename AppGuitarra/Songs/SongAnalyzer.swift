@@ -39,7 +39,11 @@ nonisolated enum SongAnalyzer {
     static let bassWeight: Float = 0.4
     static let quietShare: Float = 0.05
 
-    static func analyze(samples: [Float], sampleRate: Double, progress: (@Sendable (Double) -> Void)? = nil) -> SongAnalysis {
+    /// `tempoAudio`: a different recording of the same song to find the beat in
+    /// (the full mix, when `samples` is only the separated guitar and bass:
+    /// drums mark the beat best, while chords and strums read best without them).
+    static func analyze(samples: [Float], sampleRate: Double, tempoAudio: (samples: [Float], sampleRate: Double)? = nil,
+                        progress: (@Sendable (Double) -> Void)? = nil) -> SongAnalysis {
         let duration = Double(samples.count) / sampleRate
         guard duration > 1 else { return SongAnalysis(bpm: nil, beatOffset: 0, chords: []) }
 
@@ -49,7 +53,7 @@ nonisolated enum SongAnalyzer {
         progress?(0.05)
 
         let curve = onsetCurve(samples: audio, sampleRate: sampleRate)
-        let tempo = curve.flatMap { estimateTempo(curve: $0) }
+        let tempo = tempoCurve(tempoAudio, fallback: curve).flatMap { estimateTempo(curve: $0) }
         progress?(0.25)
 
         let beat = tempo.map { 60 / $0.bpm } ?? 0.5
@@ -75,14 +79,23 @@ nonisolated enum SongAnalyzer {
     }
 
     /// Only tempo and strum pattern, keeping chords the user may have corrected.
-    static func analyzeStrum(samples: [Float], sampleRate: Double, chords: [SongChord]) -> SongAnalysis {
+    static func analyzeStrum(samples: [Float], sampleRate: Double, chords: [SongChord],
+                             tempoAudio: (samples: [Float], sampleRate: Double)? = nil) -> SongAnalysis {
         let duration = Double(samples.count) / sampleRate
         let peak = samples.reduce(Float(0)) { max($0, abs($1)) }
         let audio = peak > 0 ? samples.map { $0 / peak } : samples
         let curve = onsetCurve(samples: audio, sampleRate: sampleRate)
-        let tempo = curve.flatMap { estimateTempo(curve: $0) }
+        let tempo = tempoCurve(tempoAudio, fallback: curve).flatMap { estimateTempo(curve: $0) }
         let strum = strumGuess(curve: curve, tempo: tempo, chords: chords, duration: duration)
         return SongAnalysis(bpm: tempo?.bpm, beatOffset: tempo?.offset ?? 0, chords: chords, strum: strum)
+    }
+
+    /// Onset curve to find the beat in: from `tempoAudio` when given, else `fallback`.
+    private static func tempoCurve(_ tempoAudio: (samples: [Float], sampleRate: Double)?, fallback: OnsetCurve?) -> OnsetCurve? {
+        guard let tempoAudio else { return fallback }
+        let peak = tempoAudio.samples.reduce(Float(0)) { max($0, abs($1)) }
+        let audio = peak > 0 ? tempoAudio.samples.map { $0 / peak } : tempoAudio.samples
+        return onsetCurve(samples: audio, sampleRate: tempoAudio.sampleRate) ?? fallback
     }
 
     private static func strumGuess(curve: OnsetCurve?, tempo: (bpm: Double, offset: Double)?, chords: [SongChord], duration: Double) -> StrumGuess? {

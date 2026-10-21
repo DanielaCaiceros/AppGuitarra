@@ -111,6 +111,10 @@ nonisolated struct Song: Codable, Hashable, Sendable, Identifiable {
     var barOffset: Double?
     /// Lesson pattern the user picked instead of the guess (nil = use the guess).
     var patternID: String?
+    /// Volumes of the separated tracks (nil = not separated yet).
+    var stems: StemMix?
+    /// True when the chords were last found from the separated guitar and bass.
+    var chordsFromStems: Bool?
 
     init(id: UUID = UUID(), title: String, audioFileName: String, duration: Double) {
         self.id = id
@@ -262,5 +266,61 @@ nonisolated enum CapoAdvisor {
         guard let noCapo = all.first else { return nil }
         let best = all.max { a, b in a.coverage < b.coverage || (a.coverage == b.coverage && a.capo > b.capo) } ?? noCapo
         return best.coverage - noCapo.coverage >= 0.05 ? best : noCapo
+    }
+}
+
+
+/// How loud each separated track plays, 0...1.
+nonisolated struct StemMix: Codable, Hashable, Sendable {
+    var volumes: [String: Double] = [:]
+
+    func volume(_ stem: Stem) -> Double {
+        volumes[stem.rawValue] ?? 1
+    }
+
+    mutating func setVolume(_ value: Double, for stem: Stem) {
+        volumes[stem.rawValue] = min(1, max(0, value))
+    }
+
+    /// Ready-made mixes for practice.
+    nonisolated enum Preset: String, CaseIterable, Identifiable, Sendable {
+        case original
+        case guitarUp
+        case guitarOnly
+        case noGuitar
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .original: "Original"
+            case .guitarUp: "Guitar up"
+            case .guitarOnly: "Guitar only"
+            case .noGuitar: "Without guitar"
+            }
+        }
+
+        var explanation: String {
+            switch self {
+            case .original: "The song as it is."
+            case .guitarUp: "Vocals and drums quieter, so the guitar stands out."
+            case .guitarOnly: "Only the guitar track (it may carry piano or synths too)."
+            case .noGuitar: "Everything except the guitar: you play that part."
+            }
+        }
+
+        var mix: StemMix {
+            switch self {
+            case .original: StemMix(volumes: [:])
+            case .guitarUp: StemMix(volumes: ["drums": 0.4, "bass": 0.7, "other": 1, "vocals": 0.25])
+            case .guitarOnly: StemMix(volumes: ["drums": 0, "bass": 0, "other": 1, "vocals": 0])
+            case .noGuitar: StemMix(volumes: ["drums": 1, "bass": 1, "other": 0, "vocals": 1])
+            }
+        }
+    }
+
+    /// The preset these volumes match, if any.
+    var preset: Preset? {
+        Preset.allCases.first { preset in Stem.allCases.allSatisfy { abs(preset.mix.volume($0) - volume($0)) < 0.01 } }
     }
 }

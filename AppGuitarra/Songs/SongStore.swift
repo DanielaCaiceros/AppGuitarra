@@ -70,6 +70,22 @@ nonisolated enum AudioDecoder {
         return (output, sourceRate / Double(factor))
     }
 
+    /// Several files of the same song mixed to mono (the separated guitar and bass).
+    static func loadMono(urls: [URL]) throws -> (samples: [Float], sampleRate: Double) {
+        var mixed: [Float] = []
+        var rate = 0.0
+        for url in urls {
+            let audio = try loadMono(url: url)
+            if mixed.isEmpty {
+                mixed = audio.samples
+                rate = audio.sampleRate
+            } else {
+                for i in 0..<min(mixed.count, audio.samples.count) { mixed[i] += audio.samples[i] }
+            }
+        }
+        return (mixed, rate)
+    }
+
     /// Saves the sound of a video as an .m4a file.
     static func extractAudio(from movie: URL, to output: URL) async throws {
         let asset = AVURLAsset(url: movie)
@@ -86,6 +102,11 @@ final class SongStore {
     private(set) var songs: [Song] = []
     /// 0...1 while a song is being analyzed.
     private(set) var progress: [UUID: Double] = [:]
+    /// 0...1 while a song is being split into tracks.
+    private(set) var separation: [UUID: Double] = [:]
+    /// Why the last separation failed, per song.
+    private(set) var separationErrors: [UUID: String] = [:]
+    @ObservationIgnored private var separationTasks: [UUID: Task<Void, Never>] = [:]
     /// Chord ids that have a diagram in the app.
     let library: Set<String>
     let chords: [String: Chord]
@@ -118,6 +139,24 @@ final class SongStore {
 
     func song(id: UUID) -> Song? {
         songs.first { $0.id == id }
+    }
+
+    func stemURL(_ stem: Stem, for song: Song) -> URL {
+        folder(for: song.id).appending(path: stem.fileName)
+    }
+
+    /// The song was separated and its track files are all there.
+    func hasStems(_ song: Song) -> Bool {
+        song.stems != nil && Stem.allCases.allSatisfy { FileManager.default.fileExists(atPath: stemURL($0, for: song).path) }
+    }
+
+    /// Audio to read chords and strums from (guitar + bass when separated),
+    /// and the full mix to find the beat in when they differ.
+    private func analysisSources(for song: Song) -> (chords: [URL], tempo: URL?) {
+        if hasStems(song) {
+            return ([stemURL(.other, for: song), stemURL(.bass, for: song)], audioURL(for: song))
+        }
+        return ([audioURL(for: song)], nil)
     }
 
     // MARK: - Persistence
@@ -159,6 +198,7 @@ final class SongStore {
     }
 
     func delete(_ song: Song) {
+        separationTasks[song.id]?.cancel()
         try? FileManager.default.removeItem(at: folder(for: song.id))
         songs.removeAll { $0.id == song.id }
         progress[song.id] = nil
@@ -204,14 +244,15 @@ final class SongStore {
         pending.status = .analyzing
         save(pending)
         let id = song.id
-        let url = audioURL(for: song)
+        let sources = analysisSources(for: song)
         progress[id] = 0
 
         let store = self
         let outcome: Result<SongAnalysis, Error> = await Task.detached(priority: .userInitiated) {
             do {
-                let audio = try AudioDecoder.loadMono(url: url)
-                let analysis = SongAnalyzer.analyze(samples: audio.samples, sampleRate: audio.sampleRate) { value in
+                let audio = try AudioDecoder.loadMono(urls: sources.chords)
+                let tempo = try sources.tempo.map { try AudioDecoder.loadMono(url: $0) }
+                let analysis = SongAnalyzer.analyze(samples: audio.samples, sampleRate: audio.sampleRate, tempoAudio: tempo) { value in
                     Task { @MainActor in store.progress[id] = value }
                 }
                 return .success(analysis)
@@ -231,6 +272,7 @@ final class SongStore {
             let best = CapoAdvisor.best(for: analysis.chords, duration: current.duration, library: library)
             current.suggestedCapo = (best?.capo ?? 0) > 0 ? best?.capo : nil
             current.status = analysis.chords.isEmpty ? .failed("No chords found. Add them by hand with Edit.") : .ready
+            current.chordsFromStems = sources.tempo != nil
         case .failure(let error):
             current.status = .failed(error.localizedDescription)
         }
@@ -241,18 +283,76 @@ final class SongStore {
     /// (for songs imported before pattern detection, or after editing chords).
     func findStrum(_ song: Song) async {
         let id = song.id
-        let url = audioURL(for: song)
+        let sources = analysisSources(for: song)
         let chords = song.chords
         progress[id] = 0.1
         let outcome: SongAnalysis? = await Task.detached(priority: .userInitiated) {
-            guard let audio = try? AudioDecoder.loadMono(url: url) else { return nil }
-            return SongAnalyzer.analyzeStrum(samples: audio.samples, sampleRate: audio.sampleRate, chords: chords)
+            guard let audio = try? AudioDecoder.loadMono(urls: sources.chords) else { return nil }
+            let tempo = sources.tempo.flatMap { try? AudioDecoder.loadMono(url: $0) }
+            return SongAnalyzer.analyzeStrum(samples: audio.samples, sampleRate: audio.sampleRate, chords: chords, tempoAudio: tempo)
         }.value
         progress[id] = nil
         guard var current = self.song(id: id), let outcome else { return }
         if let bpm = outcome.bpm { current.bpm = bpm }
         current.strum = outcome.strum
         current.barOffset = outcome.strum?.barOffset
+        save(current)
+    }
+
+    // MARK: - Separation
+
+    /// Splits the song into drums, bass, guitar & others and vocals (on the
+    /// iPad, about as long as the song or less). Keeps the chords as they are.
+    func separate(_ song: Song) {
+        let id = song.id
+        guard separationTasks[id] == nil else { return }
+        let input = audioURL(for: song)
+        let folder = folder(for: id)
+        separation[id] = 0
+        separationErrors[id] = nil
+
+        let store = self
+        let work = Task.detached(priority: .userInitiated) { () -> Result<Void, Error> in
+            do {
+                let separator = try StemSeparator()
+                try separator.separateFile(at: input, into: folder) { value in
+                    Task { @MainActor in
+                        if store.separation[id] != nil { store.separation[id] = value }
+                    }
+                }
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }
+        separationTasks[id] = Task {
+            // A detached task doesn't follow its parent's cancellation, so pass it on.
+            let outcome = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+            store.separation[id] = nil
+            store.separationTasks[id] = nil
+            guard var current = store.song(id: id) else { return }   // deleted meanwhile
+            switch outcome {
+            case .success:
+                current.stems = current.stems ?? StemMix.Preset.guitarUp.mix
+                store.save(current)
+            case .failure(let error) where error is CancellationError:
+                break
+            case .failure(let error):
+                store.separationErrors[id] = error.localizedDescription
+            }
+        }
+    }
+
+    func cancelSeparation(_ song: Song) {
+        separationTasks[song.id]?.cancel()
+    }
+
+    /// Deletes the separated tracks (to free space); the song plays as before.
+    func removeStems(_ song: Song) {
+        for stem in Stem.allCases { try? FileManager.default.removeItem(at: stemURL(stem, for: song)) }
+        var current = song
+        current.stems = nil
+        current.chordsFromStems = nil
         save(current)
     }
 }
